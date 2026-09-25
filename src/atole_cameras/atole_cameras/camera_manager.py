@@ -274,13 +274,15 @@ class CameraManager(Node):
         return result
 
     def _srv_display(self, req, res):
-        if req.camera not in CAMERAS:
-            res.ok, res.message = False, f'cámara desconocida "{req.camera}"'
+        what = req.what or 'image'
+        if req.camera not in CAMERAS or what not in ('image', 'cloud'):
+            res.ok, res.message = False, f'cámara "{req.camera}" o tipo "{what}" desconocidos (image | cloud)'
             return res
+        key = f'Cameras/{req.camera}/{"Display" if what == "image" else "Cloud"}'
         if self.config_set.service_is_ready():
-            self.config_set.call_async(ConfigSet.Request(key=f'Cameras/{req.camera}/Display',
-                                                         value=str(bool(req.enable)).lower(), persist=True))
-        res.ok, res.message = True, f'display de {req.camera} {"activado" if req.enable else "desactivado"}'
+            self.config_set.call_async(ConfigSet.Request(key=key, value=str(bool(req.enable)).lower(), persist=True))
+        res.ok = True
+        res.message = f'{"imagen" if what == "image" else "nube"} de {req.camera} {"activada" if req.enable else "desactivada"}'
         return res
 
     # ───────────────────────── estado ─────────────────────────
@@ -297,7 +299,8 @@ class CameraManager(Node):
                 position=self._cam(cam, 'Position'), connected=bool(serial) and serial in self.connected,
                 active=active or (self.sim and self._streaming(cam)), streaming=self._streaming(cam),
                 calibrated=bool(calib.get('Matrix')) and bool(serial) and calib.get('Serial') == serial,
-                display=self._cam(cam, 'Display', 'true') == 'true'))
+                display=self._cam(cam, 'Display', 'true') == 'true',
+                cloud=self._cam(cam, 'Cloud', 'false') == 'true'))
         self.status_pub.publish(msg)
         return msg
 

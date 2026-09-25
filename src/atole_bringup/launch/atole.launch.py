@@ -62,8 +62,11 @@ def _nodes(context):
     if gui:
         rosbridge = Path(get_package_share_directory('rosbridge_server')) / 'launch' / 'rosbridge_websocket_launch.xml'
         actions.append(IncludeLaunchDescription(AnyLaunchDescriptionSource(str(rosbridge))))
+        # Mallas del URDF por package:// (las del AUBO son .STL en mayúsculas: el regex por defecto solo acepta .stl).
+        assets = r'^package://(?:[-\w%]+/)*[-\w%.]+\.(?:dae|DAE|stl|STL|obj|OBJ|glb|gltf|png|PNG|jpg|jpeg|urdf|xacro)$'
         actions.append(Node(package='foxglove_bridge', executable='foxglove_bridge', output='screen',
-                            parameters=[{'port': 8765}]))
+                            parameters=[{'port': 8765, 'asset_uri_allowlist': [assets]}]))
+        actions.append(Node(package='atole_gui', executable='gui_server', output='screen'))
     return actions
 
 
@@ -72,7 +75,7 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('robot', default_value='mock', description='mock | vm | real'),
         DeclareLaunchArgument('sim', default_value='false', description='true = modo SIM (dataset_player)'),
-        DeclareLaunchArgument('gui', default_value='true', description='rosbridge (:9090) + foxglove_bridge (:8765)'),
+        DeclareLaunchArgument('gui', default_value='true', description='web GUI (:8080) + rosbridge (:9090) + foxglove_bridge (:8765)'),
         DeclareLaunchArgument('venv', default_value=DEFAULT_VENV),
         DeclareLaunchArgument('config', default_value=DEFAULT_CONFIG),
         # DDS local y con envío no bloqueante (evita el bloqueo por el gadget micro-USB).

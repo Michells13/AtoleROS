@@ -45,6 +45,15 @@ https://claude.ai/artifact/LWy6wXZ8wXN6hzgK11eD3j
   - SIM EiH: `/atole/sim/list_eih|load_eih` reproduce 240 vistas reales de cam2 con la pose del TCP grabada.
   - Paridad (`tools/tests/test_fase5_eih.py`): voxel-merge idéntico bit a bit (20/20 pares PPP) y estimación
     EiH idéntica a PozoleV3 con la misma nube de entrada.
+- **Fase 6 (web GUI):** `http://<ZED Box>:8080` (`gui:=true`).
+  - Pestañas Misión, Robot, Gripper, Cámaras/SIM, Percepción y Sistema, botón PARAR siempre visible;
+    comandos por rosbridge (:9090) con un cliente propio (`atole_gui/web/rosbridge.js`, sin dependencias).
+  - Lichtblick embebido (build web servido en local por `gui_server`): robot (URDF), nubes de escena de
+    cada cámara, nubes de percepción, marcadores y overlay de Mask R-CNN, por foxglove_bridge (:8765).
+  - `gui_bridge`: miniaturas JPEG y nubes de escena con suscripciones de instantánea (solo para las
+    cámaras con imagen o nube activadas en la pestaña Cámaras).
+  - Lichtblick: descargar `lichtblick-web.tar.gz` de su release y descomprimirlo en `Gui/LichtblickDir`
+    (por defecto `~/.local/share/atole/lichtblick-1.29.1`).
   - Los servicios y acciones de las fases siguientes siguen respondiendo "no implementado todavía (Fase N)".
 
 ## Compilar

@@ -1,5 +1,6 @@
 string camera
 bool enable
+string what                        # image | cloud ("" = image): miniatura en la GUI o nube de escena en Lichtblick
 ---
 bool ok
 string message

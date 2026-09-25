@@ -3,7 +3,7 @@ import signal
 
 import rclpy
 from rclpy.action import ActionServer
-from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
+from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor, SingleThreadedExecutor
 
 
 def not_implemented(phase):
@@ -36,11 +36,13 @@ def stub_action(node, action_type, name, phase):
     return ActionServer(node, action_type, name, execute_callback=execute)
 
 
-def run_node(node_class, args=None):
-    """Arranca un nodo con executor multihilo y cierre limpio con Ctrl+C."""
+def run_node(node_class, args=None, single_threaded=False):
+    """Arranca un nodo con executor multihilo (o de un hilo) y cierre limpio con Ctrl+C.
+    single_threaded: para nodos que crean y destruyen suscripciones desde sus callbacks; con el
+    executor multihilo de rclpy eso puede romper el wait set (InvalidHandle en event_handler)."""
     rclpy.init(args=args)
     node = node_class()
-    executor = MultiThreadedExecutor()
+    executor = SingleThreadedExecutor() if single_threaded else MultiThreadedExecutor()
     executor.add_node(node)
     try:
         executor.spin()

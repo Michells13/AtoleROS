@@ -120,6 +120,7 @@ class DetectorNode(Node):
             self.get_logger().error(f'detect_once {cam}: {res.message}')
             return res
         d = res.detections
+        self.det_pub.publish(d)                  # la GUI (gui_bridge) dibuja el overlay
         res.ok, res.message = True, f'{len(d.detections)} detecciones en {cam} ({d.inference_ms:.0f} ms)'
         return res
 

@@ -11,16 +11,18 @@ setup(
     data_files=[
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        ('share/' + package_name + '/web', glob('web/*')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='Michell IV',
     maintainer_email='michellvsigno21@gmail.com',
-    description='Puente de datos para la web GUI.',
+    description='Web GUI: servidor, puente de datos y página (rosbridge + Lichtblick).',
     license='Proprietary',
     entry_points={
         'console_scripts': [
-            'gui_bridge = atole_gui.gui_bridge:main'
+            'gui_bridge = atole_gui.gui_bridge:main',
+            'gui_server = atole_gui.gui_server:main',
         ],
     },
 )

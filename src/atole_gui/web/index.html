@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AtoleROS</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="brand">AtoleROS</div>
+  <div id="conn" class="pill bad" title="Conexión con rosbridge (:9090)">sin conexión</div>
+  <div id="phase" class="pill">—</div>
+  <div id="source" class="pill muted">—</div>
+  <div id="mission-state" class="pill muted" title="Estado de la misión">IDLE</div>
+  <div class="spacer"></div>
+  <button id="stop" class="stop" title="Aborta la misión y para el robot">PARAR</button>
+</header>
+
+<main>
+  <section class="panel">
+    <nav class="tabs" role="tablist">
+      <button data-tab="mission" class="active">Misión</button>
+      <button data-tab="robot">Robot</button>
+      <button data-tab="gripper">Gripper</button>
+      <button data-tab="cameras">Cámaras</button>
+      <button data-tab="perception">Percepción</button>
+      <button data-tab="system">Sistema</button>
+    </nav>
+
+    <!-- ───────── Misión ───────── -->
+    <div class="tab" id="tab-mission">
+      <div class="status-box">
+        <div class="big" id="m-state">IDLE</div>
+        <div id="m-message" class="msg">—</div>
+        <div class="kv"><span>Pod actual</span><b id="m-pod">—</b><span>Cosechados</span><b id="m-done">0</b>
+          <span>Alcanzables</span><b id="m-remaining">—</b><span>Fallidos</span><b id="m-failed">0</b></div>
+      </div>
+      <div id="m-confirm" class="confirm" hidden>
+        <div>Esperando confirmación: <b id="m-prompt"></b></div>
+        <button id="m-confirm-btn" class="primary">Confirmar paso</button>
+      </div>
+      <div class="grid2">
+        <label>Refinamiento EiH
+          <select id="m-eih"><option value="">Config.xml</option><option value="none">none</option>
+            <option value="single">single</option><option value="fused_2view">fused_2view</option><option value="ppp">ppp</option></select></label>
+        <label>Selección
+          <select id="m-sel"><option value="">Config.xml</option><option value="proximity">proximity</option>
+            <option value="left_to_right">izquierda → derecha</option><option value="right_to_left">derecha → izquierda</option>
+            <option value="confidence">confianza</option></select></label>
+      </div>
+      <label class="check"><input type="checkbox" id="m-step"> Paso a paso (confirmar cada movimiento)</label>
+      <label class="check"><input type="checkbox" id="m-skip"> Sin gripper (pruebas)</label>
+      <div class="row">
+        <button id="m-all" class="primary">Cosechar todos</button>
+        <button id="m-next" class="primary">Siguiente pod</button>
+        <button id="m-abort" class="danger">Abortar</button>
+      </div>
+      <p class="hint">La misión empieza y termina en Home2 y solo arranca con el sistema en READY.</p>
+    </div>
+
+    <!-- ───────── Robot ───────── -->
+    <div class="tab" id="tab-robot" hidden>
+      <div class="kv"><span>Conexión</span><b id="r-conn">—</b><span>Modo</span><b id="r-mode">—</b>
+        <span>Seguridad</span><b id="r-safety">—</b><span>Control</span><b id="r-owner">—</b></div>
+      <table class="joints"><thead><tr><th></th><th>grados</th><th colspan="4">jog</th></tr></thead><tbody id="r-joints"></tbody></table>
+      <div class="grid2"><label>Paso de jog (°)<select id="r-step"><option>1</option><option selected>5</option><option>10</option></select></label>
+        <label>TCP (m)<output id="r-tcp">—</output></label></div>
+      <div class="row">
+        <label class="check"><input type="checkbox" id="r-freedrive"> Freedrive</label>
+        <label class="check"><input type="checkbox" id="r-j6"> J6 bloqueado</label>
+      </div>
+      <h3>Poses guardadas</h3>
+      <table class="poses"><tbody id="r-poses"></tbody></table>
+      <div class="row"><button id="r-unlock">Desbloquear parada de protección</button><button id="r-reconnect">Reconectar</button></div>
+    </div>
+
+    <!-- ───────── Gripper ───────── -->
+    <div class="tab" id="tab-gripper" hidden>
+      <div class="kv"><span>Conexión</span><b id="g-conn">—</b><span>Inicialización</span><b id="g-init">—</b>
+        <span>Apertura</span><b id="g-open">—</b><span>Ángulo</span><b id="g-angle">—</b><span>Estado</span><b id="g-state">—</b></div>
+      <div class="row"><button id="g-openbtn" class="primary">Abrir</button><button id="g-close" class="primary">Cerrar (Harvest)</button>
+        <button id="g-reinit">Inicializar</button></div>
+      <label>Apertura <output id="g-slider-v">500</output><input type="range" id="g-slider" min="0" max="1000" step="10" value="500"></label>
+      <div class="row"><button id="g-move">Mover a la apertura</button></div>
+      <div class="grid2"><label>Rotación (°)<input type="number" id="g-rot" value="0" step="15"></label>
+        <label>&nbsp;<button id="g-rotate">Girar</button></label></div>
+      <p class="hint">Mover el gripper mueve hardware real: comprueba que la zona está despejada.</p>
+    </div>
+
+    <!-- ───────── Cámaras y SIM ───────── -->
+    <div class="tab" id="tab-cameras" hidden>
+      <h3>Cámara EtH activa</h3>
+      <div class="row" id="c-eth"></div>
+      <table class="cams"><thead><tr><th>Cámara</th><th>Serial</th><th>Estado</th><th>Imagen</th><th>Nube</th></tr></thead><tbody id="c-table"></tbody></table>
+      <div id="sim-box" hidden>
+        <h3>Modo SIM</h3>
+        <label>Dataset EtH (cam0 + cam1)<select id="s-eth"></select></label>
+        <div class="row"><button id="s-load" class="primary">Cargar</button><button id="s-stop">Detener</button></div>
+        <label>Vista EiH (cam2)<select id="s-eih"></select></label>
+        <div class="row"><button id="s-load-eih">Cargar vista EiH</button></div>
+      </div>
+    </div>
+
+    <!-- ───────── Percepción ───────── -->
+    <div class="tab" id="tab-perception" hidden>
+      <div class="grid2"><label>Cámara<select id="p-cam"><option value="">EtH activa</option><option value="cam2">cam2 (EiH)</option></select></label>
+        <label class="check">&nbsp;<span><input type="checkbox" id="p-stream"> Detección continua</span></label></div>
+      <div class="row"><button id="p-detect" class="primary">Mask R-CNN</button><button id="p-estimate" class="primary">Estimar pods</button></div>
+      <img id="p-overlay" class="overlay" alt="">
+      <table class="pods"><thead><tr><th>#</th><th>score</th><th>estado</th><th>agarre (m)</th><th>L×W (mm)</th><th>conf</th></tr></thead><tbody id="p-pods"></tbody></table>
+    </div>
+
+    <!-- ───────── Sistema ───────── -->
+    <div class="tab" id="tab-system" hidden>
+      <table class="health"><tbody id="h-items"></tbody></table>
+      <p class="hint">Lichtblick: <a id="lb-link" target="_blank" rel="noopener">abrir en otra pestaña</a> · rosbridge :9090 · foxglove_bridge :8765</p>
+    </div>
+
+    <div id="log" class="log" aria-live="polite"></div>
+  </section>
+
+  <section class="viewer">
+    <iframe id="lichtblick" title="Lichtblick"></iframe>
+    <div class="thumbs" id="thumbs"></div>
+  </section>
+</main>
+<script src="rosbridge.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

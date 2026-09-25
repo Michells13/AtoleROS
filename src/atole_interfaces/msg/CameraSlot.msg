@@ -8,4 +8,5 @@ bool connected                     # detectada en el bus GMSL
 bool active                        # su componente ZED está cargado
 bool streaming
 bool calibrated                    # hay matriz válida para su serial
-bool display                       # la GUI la está mostrando
+bool display                       # la GUI muestra su imagen
+bool cloud                         # Lichtblick muestra su nube de escena (gui_bridge)

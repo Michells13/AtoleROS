@@ -23,6 +23,7 @@ from atole_interfaces.srv import DetectOnce
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.duration import Duration
+from rclpy.event_handler import SubscriptionEventCallbacks
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
@@ -98,8 +99,12 @@ class PodPoseNode(Node):
                     done.set()
                 elif len(frames) > 6:                      # descarta stamps viejos incompletos
                     frames.pop(min(k for k in frames if k != 'result'))
+        # Sin los manejadores de eventos QoS por defecto: destruir una suscripción con ellos mientras el
+        # executor multihilo monta el wait set rompe rclpy (InvalidHandle en event_handler).
+        no_events = SubscriptionEventCallbacks(use_default_callbacks=False)
         subs = [self.create_subscription(t, f'{base}/{name}', lambda m, k=key: store(k, m), SENSOR_QOS,
-                                         callback_group=self.group) for key, (t, name) in topics.items()]
+                                         callback_group=self.group, event_callbacks=no_events)
+                for key, (t, name) in topics.items()]
         try:
             if not done.wait(timeout):
                 seen = sorted({k for f in frames.values() for k in f})

@@ -1,0 +1,36 @@
+{
+  "configById": {
+    "3D!atole": {
+      "followTf": "base_link",
+      "followMode": "follow-pose",
+      "scene": { "backgroundColor": "#101412", "transforms": { "showLabel": false, "axisScale": 0.6 } },
+      "cameraState": { "perspective": true, "distance": 3.2, "phi": 55, "thetaOffset": 135, "targetOffset": [0.6, 0, 0.4],
+                       "target": [0, 0, 0], "targetOrientation": [0, 0, 0, 1], "fovy": 45, "near": 0.01, "far": 200 },
+      "transforms": {},
+      "topics": {
+        "/robot_description": { "visible": true },
+        "/atole/perception/markers": { "visible": true },
+        "/atole/perception/cloud/partial": { "visible": false, "pointSize": 2 },
+        "/atole/perception/cloud/completed": { "visible": true, "pointSize": 2, "colorMode": "colormap", "colorField": "id", "colorMap": "turbo" },
+        "/atole/perception/cloud/fused": { "visible": true, "pointSize": 3, "colorMode": "flat", "flatColor": "#ff4fd8" },
+        "/atole/gui/cam0/cloud": { "visible": true, "pointSize": 2, "colorMode": "rgb", "colorField": "rgb" },
+        "/atole/gui/cam1/cloud": { "visible": true, "pointSize": 2, "colorMode": "rgb", "colorField": "rgb" },
+        "/atole/gui/camC/cloud": { "visible": true, "pointSize": 2, "colorMode": "rgb", "colorField": "rgb" },
+        "/atole/gui/cam2/cloud": { "visible": true, "pointSize": 2, "colorMode": "rgb", "colorField": "rgb" }
+      },
+      "layers": {
+        "grid": { "visible": true, "frameLocked": true, "label": "Grid", "instanceId": "grid", "layerId": "foxglove.Grid",
+                  "size": 4, "divisions": 20, "lineWidth": 1, "color": "#2b3632", "position": [0, 0, 0], "rotation": [0, 0, 0], "order": 1 }
+      },
+      "publish": { "type": "point", "poseTopic": "/move_base_simple/goal", "pointTopic": "/clicked_point",
+                   "poseEstimateTopic": "/initialpose", "poseEstimateXDeviation": 0.5, "poseEstimateYDeviation": 0.5,
+                   "poseEstimateThetaDeviation": 0.26 },
+      "imageMode": {}
+    },
+    "Image!overlay": { "imageMode": { "imageTopic": "/atole/gui/detections/compressed" }, "cameraTopic": "/atole/gui/detections/compressed" }
+  },
+  "globalVariables": {},
+  "userNodes": {},
+  "playbackConfig": { "speed": 1 },
+  "layout": { "first": "3D!atole", "second": "Image!overlay", "direction": "column", "splitPercentage": 72 }
+}

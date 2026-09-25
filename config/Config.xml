@@ -4,10 +4,10 @@
        Valores iniciales tomados de PozoleV3/Config.xml el 2026-09-25. Ángulos en grados, distancias en metros. -->
   <Cameras>
     <SelectedEtH>cam1</SelectedEtH>
-    <cam0><Model>zedxhdr</Model><Role>eth</Role><Position>izquierda</Position><Serial /><Display>true</Display><DepthMode>NEURAL_PLUS</DepthMode></cam0>
-    <cam1><Model>zedxhdr</Model><Role>eth</Role><Position>derecha</Position><Serial>64813059</Serial><Display>true</Display><DepthMode>NEURAL_PLUS</DepthMode></cam1>
-    <camC><Model>zedxhdr</Model><Role>eth</Role><Position>centro</Position><Serial /><Display>true</Display><DepthMode>NEURAL_PLUS</DepthMode></camC>
-    <cam2><Model>zedxm</Model><Role>eih</Role><Position>tcp</Position><Serial>55177207</Serial><Display>true</Display><DepthMode>NEURAL_PLUS</DepthMode></cam2>
+    <cam0><Model>zedxhdr</Model><Role>eth</Role><Position>izquierda</Position><Serial /><Display>true</Display><Cloud>true</Cloud><DepthMode>NEURAL_PLUS</DepthMode></cam0>
+    <cam1><Model>zedxhdr</Model><Role>eth</Role><Position>derecha</Position><Serial>64813059</Serial><Display>true</Display><Cloud>true</Cloud><DepthMode>NEURAL_PLUS</DepthMode></cam1>
+    <camC><Model>zedxhdr</Model><Role>eth</Role><Position>centro</Position><Serial /><Display>true</Display><Cloud>false</Cloud><DepthMode>NEURAL_PLUS</DepthMode></camC>
+    <cam2><Model>zedxm</Model><Role>eih</Role><Position>tcp</Position><Serial>55177207</Serial><Display>true</Display><Cloud>false</Cloud><DepthMode>NEURAL_PLUS</DepthMode></cam2>
   </Cameras>
 
   <!-- Matriz 4x4 por filas. EtH: base_link<-marco óptico de la cámara. EiH: tool0 (brida)<-marco óptico.
@@ -124,5 +124,7 @@
     <ChArUco><Rows>8</Rows><Cols>8</Cols><SquareM>0.0254</SquareM><MarkerM>0.01905</MarkerM><Dictionary>DICT_4X4_50</Dictionary></ChArUco>
   </Calibration>
 
+  <!-- Web GUI (Fase 6): http://<ZED Box>:Port. Lichtblick web (build estático) se sirve desde LichtblickDir. -->
+  <Gui><Port>8080</Port><LichtblickDir>~/.local/share/atole/lichtblick-1.29.1</LichtblickDir><ThumbWidth>640</ThumbWidth><ThumbRateHz>2.0</ThumbRateHz><CloudStride>6</CloudStride><CloudRateHz>1.0</CloudRateHz></Gui>
   <Sim><DatasetDir>/home/user/Documents/Corvus/datasets/Itabuna_plus</DatasetDir><EihRoot>/home/user/Documents/Corvus/datasets</EihRoot><RateHz>2.0</RateHz></Sim>
 </Atole>
