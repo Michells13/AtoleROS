@@ -1,0 +1,5 @@
+string camera
+---
+bool ok
+string message
+uint32 n_corners

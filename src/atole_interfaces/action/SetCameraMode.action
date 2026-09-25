@@ -1,0 +1,8 @@
+string active_eth                  # cam0 | cam1 | camC
+string source                      # live | sim
+---
+bool ok
+string message
+CameraStatus status
+---
+string phase                       # unload | load | wait_stream

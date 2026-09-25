@@ -1,0 +1,7 @@
+string name                        # home | home2 | release
+bool from_current                  # true = usar las articulaciones actuales del robot
+float64[6] joints_deg              # si from_current = false
+---
+bool ok
+string message
+float64[6] joints_deg

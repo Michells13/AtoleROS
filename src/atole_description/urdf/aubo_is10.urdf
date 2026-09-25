@@ -1,0 +1,186 @@
+<?xml version="1.0"?>
+<!-- AUBO iS10 — URDF generado desde los datos cinemáticos de Theobroma/PozoleV3.
+     Frames y orígenes de joints = URDF original aubo_description (Modified DH, eje Z local).
+     Meshes: STL en metros, en el frame local (ROS: X adelante, Y izquierda, Z arriba).
+     LÍMITES e INERCIAS son NOMINALES (placeholders) — ver README. -->
+<robot name="aubo_is10">
+  <!-- Copiado de pre-Alpha/aubo_is10_description/aubo_is10.urdf (el que usa PozoleV3).
+       Cambios: mallas en package://atole_description/meshes y límites ampliados a ±2π:
+       el original tenía ±3.05 rad, pero Home (J4=-250°) y Release (J6=-314°) los superan.
+       PENDIENTE: verificar los límites reales con la ficha técnica del iS10.
+       PENDIENTE (Fase 2): gripper (meshes/gripper.dae) y montajes de las 4 cámaras. -->
+  <material name="aubo_gray"><color rgba="0.357 0.369 0.388 1.0"/></material>
+  <link name="base_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://atole_description/meshes/link0.STL" scale="1 1 1"/></geometry>
+      <material name="aubo_gray"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://atole_description/meshes/link0.STL" scale="1 1 1"/></geometry>
+    </collision>
+    <!-- INERCIA NOMINAL (placeholder) — reemplazar con valores del datasheet AUBO iS10 -->
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1.0"/>
+      <inertia ixx="0.01" ixy="0" ixz="0" iyy="0.01" iyz="0" izz="0.01"/>
+    </inertial>
+  </link>
+  <link name="shoulder_Link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://atole_description/meshes/link1.STL" scale="1 1 1"/></geometry>
+      <material name="aubo_gray"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://atole_description/meshes/link1.STL" scale="1 1 1"/></geometry>
+    </collision>
+    <!-- INERCIA NOMINAL (placeholder) — reemplazar con valores del datasheet AUBO iS10 -->
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1.0"/>
+      <inertia ixx="0.01" ixy="0" ixz="0" iyy="0.01" iyz="0" izz="0.01"/>
+    </inertial>
+  </link>
+  <joint name="shoulder_joint" type="revolute">
+    <parent link="base_link"/>
+    <child link="shoulder_Link"/>
+    <origin xyz="0 0 0.157" rpy="0 0 3.14159265359"/>
+    <axis xyz="0 0 1"/>
+    <!-- límites NOMINALES — ajustar al datasheet -->
+    <limit lower="-6.2832" upper="6.2832" effort="200" velocity="3.0"/>
+  </joint>
+  <link name="upperArm_Link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://atole_description/meshes/link2.STL" scale="1 1 1"/></geometry>
+      <material name="aubo_gray"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://atole_description/meshes/link2.STL" scale="1 1 1"/></geometry>
+    </collision>
+    <!-- INERCIA NOMINAL (placeholder) — reemplazar con valores del datasheet AUBO iS10 -->
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1.0"/>
+      <inertia ixx="0.01" ixy="0" ixz="0" iyy="0.01" iyz="0" izz="0.01"/>
+    </inertial>
+  </link>
+  <joint name="upperArm_joint" type="revolute">
+    <parent link="shoulder_Link"/>
+    <child link="upperArm_Link"/>
+    <origin xyz="0 0.185 0" rpy="-1.57079632679 -1.57079632679 0"/>
+    <axis xyz="0 0 1"/>
+    <!-- límites NOMINALES — ajustar al datasheet -->
+    <limit lower="-6.2832" upper="6.2832" effort="200" velocity="3.0"/>
+  </joint>
+  <link name="foreArm_Link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://atole_description/meshes/link3.STL" scale="1 1 1"/></geometry>
+      <material name="aubo_gray"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://atole_description/meshes/link3.STL" scale="1 1 1"/></geometry>
+    </collision>
+    <!-- INERCIA NOMINAL (placeholder) — reemplazar con valores del datasheet AUBO iS10 -->
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1.0"/>
+      <inertia ixx="0.01" ixy="0" ixz="0" iyy="0.01" iyz="0" izz="0.01"/>
+    </inertial>
+  </link>
+  <joint name="foreArm_joint" type="revolute">
+    <parent link="upperArm_Link"/>
+    <child link="foreArm_Link"/>
+    <origin xyz="0.613 0 0" rpy="-3.14159265359 0 0"/>
+    <axis xyz="0 0 1"/>
+    <!-- límites NOMINALES — ajustar al datasheet -->
+    <limit lower="-6.2832" upper="6.2832" effort="200" velocity="3.0"/>
+  </joint>
+  <link name="wrist1_Link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://atole_description/meshes/link4.STL" scale="1 1 1"/></geometry>
+      <material name="aubo_gray"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://atole_description/meshes/link4.STL" scale="1 1 1"/></geometry>
+    </collision>
+    <!-- INERCIA NOMINAL (placeholder) — reemplazar con valores del datasheet AUBO iS10 -->
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1.0"/>
+      <inertia ixx="0.01" ixy="0" ixz="0" iyy="0.01" iyz="0" izz="0.01"/>
+    </inertial>
+  </link>
+  <joint name="wrist1_joint" type="revolute">
+    <parent link="foreArm_Link"/>
+    <child link="wrist1_Link"/>
+    <origin xyz="0.572 0 0" rpy="3.14159265359 0 1.57079632679"/>
+    <axis xyz="0 0 1"/>
+    <!-- límites NOMINALES — ajustar al datasheet -->
+    <limit lower="-6.2832" upper="6.2832" effort="200" velocity="3.0"/>
+  </joint>
+  <link name="wrist2_Link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://atole_description/meshes/link5.STL" scale="1 1 1"/></geometry>
+      <material name="aubo_gray"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://atole_description/meshes/link5.STL" scale="1 1 1"/></geometry>
+    </collision>
+    <!-- INERCIA NOMINAL (placeholder) — reemplazar con valores del datasheet AUBO iS10 -->
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1.0"/>
+      <inertia ixx="0.01" ixy="0" ixz="0" iyy="0.01" iyz="0" izz="0.01"/>
+    </inertial>
+  </link>
+  <joint name="wrist2_joint" type="revolute">
+    <parent link="wrist1_Link"/>
+    <child link="wrist2_Link"/>
+    <origin xyz="0 0.115 0" rpy="-1.57079632679 0 0"/>
+    <axis xyz="0 0 1"/>
+    <!-- límites NOMINALES — ajustar al datasheet -->
+    <limit lower="-6.2832" upper="6.2832" effort="200" velocity="3.0"/>
+  </joint>
+  <link name="wrist3_Link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://atole_description/meshes/link6.STL" scale="1 1 1"/></geometry>
+      <material name="aubo_gray"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://atole_description/meshes/link6.STL" scale="1 1 1"/></geometry>
+    </collision>
+    <!-- INERCIA NOMINAL (placeholder) — reemplazar con valores del datasheet AUBO iS10 -->
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1.0"/>
+      <inertia ixx="0.01" ixy="0" ixz="0" iyy="0.01" iyz="0" izz="0.01"/>
+    </inertial>
+  </link>
+  <joint name="wrist3_joint" type="revolute">
+    <parent link="wrist2_Link"/>
+    <child link="wrist3_Link"/>
+    <origin xyz="0 -0.102 0" rpy="1.57079632679 0 0"/>
+    <axis xyz="0 0 1"/>
+    <!-- límites NOMINALES — ajustar al datasheet -->
+    <limit lower="-6.2832" upper="6.2832" effort="200" velocity="3.0"/>
+  </joint>
+  <link name="tool0"/>
+  <joint name="wrist3_to_tool0" type="fixed">
+    <parent link="wrist3_Link"/>
+    <child link="tool0"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+</robot>

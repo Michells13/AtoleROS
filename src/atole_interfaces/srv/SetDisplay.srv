@@ -1,0 +1,5 @@
+string camera
+bool enable
+---
+bool ok
+string message

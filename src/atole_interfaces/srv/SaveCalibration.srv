@@ -1,0 +1,4 @@
+CalibrationResult result
+---
+bool ok
+string message

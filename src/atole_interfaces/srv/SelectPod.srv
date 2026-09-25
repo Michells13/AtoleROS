@@ -1,0 +1,8 @@
+PodArray pods
+string strategy                    # proximity | left_to_right | right_to_left | confidence ("" = Config.xml)
+---
+bool ok
+string message
+int32 selected_index               # -1 si ninguno es alcanzable
+int32[] order                      # índices ordenados según la estrategia
+PodArray evaluated                 # pods con reachable rellenado

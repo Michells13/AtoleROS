@@ -1,0 +1,6 @@
+string client_id
+bool enable
+float64 damping
+---
+bool ok
+string message

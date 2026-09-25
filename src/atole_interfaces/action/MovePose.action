@@ -1,0 +1,17 @@
+uint8 MOVE_L=0
+uint8 MOVE_J_IK=1
+string client_id
+geometry_msgs/PoseStamped target   # TCP en base_link
+uint8 move_type
+float64 speed
+float64 accel
+float64 timeout_s
+bool prefer_facing
+---
+bool ok
+string message
+float64[6] ik_solution
+ArmState final_state
+---
+geometry_msgs/Pose tcp_pose
+float64 remaining_m

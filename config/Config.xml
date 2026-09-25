@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Atole version="1">
+  <!-- Configuración de AtoleROS. Único escritor: config_manager (atole_config).
+       Valores iniciales tomados de PozoleV3/Config.xml el 2026-09-25. Ángulos en grados, distancias en metros. -->
+  <Cameras>
+    <SelectedEtH>cam1</SelectedEtH>
+    <cam0><Model>zedxhdr</Model><Role>eth</Role><Position>izquierda</Position><Serial></Serial><Display>true</Display></cam0>
+    <cam1><Model>zedxhdr</Model><Role>eth</Role><Position>derecha</Position><Serial>64813059</Serial><Display>true</Display></cam1>
+    <camC><Model>zedxhdr</Model><Role>eth</Role><Position>centro</Position><Serial></Serial><Display>true</Display></camC>
+    <cam2><Model>zedxm</Model><Role>eih</Role><Position>tcp</Position><Serial>55177207</Serial><Display>true</Display></cam2>
+  </Cameras>
+
+  <!-- Matriz 4x4 por filas. EtH: base_link<-marco óptico de la cámara. EiH: tool0 (brida)<-marco óptico.
+       Serial = cámara a la que corresponde; si la cámara conectada tiene otro serial, la calibración no vale. -->
+  <Calibrations>
+    <cam1><Serial>64813059</Serial><Parent>base_link</Parent><Backend>pozole</Backend><Method>TSAI</Method>
+      <Notes>PozoleV3; recalibración 2026-09-24 la reproduce (0.0 mm)</Notes>
+      <Matrix>0.433316 -0.506591 0.745387 0.0107993 0.262445 0.862151 0.433381 -0.529487 -0.862183 0.0078319 0.506536 0.158133 0 0 0 1</Matrix></cam1>
+    <cam0><Serial>62627545</Serial><Parent>base_link</Parent><Backend>pozole</Backend><Method>TSAI</Method>
+      <Notes>PozoleV3 (cam0 izquierda, serial 62627545). Confirmar que es la misma cámara y montaje.</Notes>
+      <Matrix>0.449192 0.496248 0.742943 0.00248942 -0.242905 0.868068 -0.432962 0.528105 -0.859781 0.0140186 0.51047 0.158835 0 0 0 1</Matrix></cam0>
+    <camC><Serial></Serial><Parent>base_link</Parent><Backend></Backend><Method></Method><Notes>Sin calibrar</Notes><Matrix></Matrix></camC>
+    <cam2><Serial>55177207</Serial><Parent>tool0</Parent><Backend>tecnalia</Backend><Method></Method>
+      <Notes>Matriz en uso en PozoleV3 (buenos resultados en la fusión cam1+cam2)</Notes>
+      <Matrix>0.0331103 -0.999416 0.0084485 0.0445826 0.999434 0.0330585 -0.00619972 -0.0240761 0.00591681 0.00864899 0.999945 0.110364 0 0 0 1</Matrix></cam2>
+  </Calibrations>
+
+  <Robot>
+    <Backend>aubo</Backend>
+    <Mode>vm</Mode>
+    <Aubo><IP>192.168.100.27</IP><Port>30004</Port><User>aubo</User><Pass>123456</Pass><RobotName></RobotName></Aubo>
+    <AuboReal><IP>192.168.43.100</IP><Port>30004</Port><User>aubo</User><Pass>123456</Pass><RobotName></RobotName></AuboReal>
+    <LockJ6>true</LockJ6>
+    <StateRateHz>20</StateRateHz>
+  </Robot>
+
+  <Gripper>
+    <Port>/dev/ttyUSB0</Port><Baud>115200</Baud><Parity>N</Parity>
+    <StopBits>1</StopBits><SlaveAddress>1</SlaveAddress><Timeout>1.0</Timeout>
+    <InitDirection>0</InitDirection><FullInit>1</FullInit><InitTimeoutS>15</InitTimeoutS>
+  </Gripper>
+
+  <Poses>
+    <Home>
+      <J1>0.0</J1>
+      <J2>-84.0</J2>
+      <J3>155.0</J3>
+      <J4>-250.0</J4>
+      <J5>90.0</J5>
+      <J6>0.0</J6>
+    </Home>
+    <Home2>
+      <J1>0.0</J1>
+      <J2>-0.1</J2>
+      <J3>162.2</J3>
+      <J4>40.0</J4>
+      <J5>-102.9</J5>
+      <J6>0.0</J6>
+    </Home2>
+    <Release>
+      <J1>47.4755</J1>
+      <J2>-84.9425</J2>
+      <J3>114.7875</J3>
+      <J4>132.7513</J4>
+      <J5>292.5509</J5>
+      <J6>-314.6169</J6>
+    </Release>
+  </Poses>
+
+  <Harvest>
+    <ApproachDist>0.17</ApproachDist><PickOffset>0</PickOffset><GripperYaw>0</GripperYaw>
+    <PickPoint>bottom</PickPoint>
+    <ClosePos>0</ClosePos>
+    <!-- PozoleV3 tenía CloseForce 200 y CloseSpeed 150; el RGI-100 admite como máximo 100. -->
+    <CloseForce>100</CloseForce><CloseSpeed>100</CloseSpeed>
+    <RotateDeg>180.0</RotateDeg><RotateDir>cw</RotateDir><RotateForce>50</RotateForce><RotateSpeed>50</RotateSpeed>
+    <SpeedApproach>0.15</SpeedApproach><SpeedPick>0.05</SpeedPick><SpeedRelease>0.20</SpeedRelease><Accel>0.10</Accel>
+    <MoveTimeoutS>30.0</MoveTimeoutS>
+    <MoveHome2>moveJ</MoveHome2><MovePrepick>moveJ_IK</MovePrepick><MovePick>moveL</MovePick><MoveRetreat>moveL</MoveRetreat><MoveRelease>moveJ</MoveRelease>
+    <StepDelayS>1.0</StepDelayS><RotateDelayS>1.8</RotateDelayS>
+  </Harvest>
+
+  <EIH>
+    <Strategy>single</Strategy>  <!-- single | fused_2view | ppp -->
+    <SettleS>0.4</SettleS>
+    <CorrelateGateM>0.20</CorrelateGateM>
+    <MaxMoveM>0.0</MaxMoveM>       <!-- 0 = sin límite -->
+    <MaxAngleDeg>15.0</MaxAngleDeg>
+    <FuseVoxelM>0.003</FuseVoxelM>
+    <FuseBaselineM>0.03</FuseBaselineM>
+    <PPP><OffsetM>0.10</OffsetM><TowardHome2>true</TowardHome2><AimCentroid>true</AimCentroid><MaxTiltDeg>35</MaxTiltDeg></PPP>
+  </EIH>
+
+  <Perception>
+    <ModelPath>/home/user/Documents/Corvus/models/ItabunaM.pth</ModelPath>
+    <ModelProfile>itabuna</ModelProfile>
+    <ScoreThresh>0.50</ScoreThresh>
+    <EihModelPath>/home/user/Documents/pre-Alpha/models/ItabunaM_EiH2.pth</EihModelPath>
+    <EihScoreThresh>0.80</EihScoreThresh>
+    <ExcludeClasses>trunk</ExcludeClasses>
+    <Completion>
+      <PythonExe>/home/user/venvs/adapointr/bin/python</PythonExe>
+      <Worker>/home/user/Documents/Corvus/completion/adapointr_infer.py</Worker>
+      <EthCkpt>/home/user/Documents/Corvus/completion/AdaPoinTr/runs/ft_aug_100e_20260513_235746/best.pth</EthCkpt>
+      <EihCkpt>/home/user/Documents/pre-Alpha/models/EiH_Completion.pth</EihCkpt>
+    </Completion>
+    <!-- Área de trabajo en base_link (a definir con el robot real). -->
+    <Workspace><MaxReachM>1.30</MaxReachM><MinReachM>0.25</MinReachM><MinZ>-0.50</MinZ><MaxZ>1.50</MaxZ></Workspace>
+  </Perception>
+
+  <Selection><Strategy>proximity</Strategy></Selection>  <!-- proximity | left_to_right | right_to_left | confidence -->
+
+  <Calibration>
+    <Backend>pozole</Backend>  <!-- pozole | tecnalia -->
+    <ImagesDir>/home/user/Documents/pre-Alpha/AtoleROS/calibImages</ImagesDir>
+    <ChArUco><Rows>8</Rows><Cols>8</Cols><SquareM>0.0254</SquareM><MarkerM>0.01905</MarkerM><Dictionary>DICT_4X4_50</Dictionary></ChArUco>
+  </Calibration>
+
+  <Sim><DatasetDir>/home/user/Documents/Corvus/datasets/Itabuna_plus</DatasetDir><RateHz>2.0</RateHz></Sim>
+</Atole>

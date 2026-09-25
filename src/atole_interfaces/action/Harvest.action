@@ -1,0 +1,13 @@
+uint8 MODE_ALL=0
+uint8 MODE_NEXT=1
+uint8 mode
+bool step_mode                     # confirmar antes de cada movimiento del robot
+string eih_strategy                # single | fused_2view | ppp ("" = Config.xml)
+string selection_strategy          # "" = Config.xml
+---
+bool ok
+string message
+int32 pods_harvested
+int32 pods_failed
+---
+MissionStatus status

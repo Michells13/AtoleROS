@@ -1,0 +1,4 @@
+string camera                      # cam0 | cam1 | camC
+---
+bool ok
+string message

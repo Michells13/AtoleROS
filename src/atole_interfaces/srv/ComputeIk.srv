@@ -1,0 +1,6 @@
+geometry_msgs/PoseStamped target  # TCP deseado
+bool prefer_facing                 # preferir la solución de frente (J1 hacia el objetivo)
+---
+bool ok
+string message
+float64[6] joints

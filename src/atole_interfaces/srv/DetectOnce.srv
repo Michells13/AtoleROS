@@ -1,0 +1,6 @@
+string camera                      # cámara activa o "sim"
+bool include_masks
+---
+bool ok
+string message
+DetectionArray detections

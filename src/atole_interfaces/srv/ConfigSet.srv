@@ -1,0 +1,6 @@
+string key
+string value
+bool persist                       # true = guardar en Config.xml
+---
+bool ok
+string message

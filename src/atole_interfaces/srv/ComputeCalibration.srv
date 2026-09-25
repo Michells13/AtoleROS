@@ -1,0 +1,7 @@
+string camera
+string method                      # TSAI | PARK | HORAUD | ANDREFF | DANIILIDIS
+string backend                     # pozole | tecnalia ("" = Config.xml)
+---
+bool ok
+string message
+CalibrationResult result

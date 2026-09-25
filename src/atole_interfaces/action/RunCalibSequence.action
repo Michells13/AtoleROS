@@ -1,0 +1,12 @@
+string camera
+float64 speed
+float64 accel
+float64 settle_s
+---
+bool ok
+string message
+uint32 poses_captured
+---
+uint32 pose_index
+uint32 pose_total
+string phase

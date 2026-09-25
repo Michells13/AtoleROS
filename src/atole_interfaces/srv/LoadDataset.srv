@@ -1,0 +1,5 @@
+string folder
+float64 rate_hz
+---
+bool ok
+string message

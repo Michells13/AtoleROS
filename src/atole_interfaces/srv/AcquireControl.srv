@@ -1,0 +1,7 @@
+string client_id                   # mission | calib | gui ...
+bool release
+bool force
+---
+bool ok
+string owner
+string message

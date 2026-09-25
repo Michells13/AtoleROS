@@ -1,0 +1,13 @@
+string client_id
+float64[6] joints                  # rad
+float64 speed
+float64 accel
+float64 timeout_s
+bool bypass_j6_lock
+---
+bool ok
+string message
+ArmState final_state
+---
+float64[6] joints
+float64 remaining_rad

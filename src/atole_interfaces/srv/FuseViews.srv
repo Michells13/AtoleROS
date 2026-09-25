@@ -1,0 +1,7 @@
+sensor_msgs/PointCloud2[] clouds   # cada una con su frame_id y stamp de captura
+string target_frame
+float64 voxel_m
+---
+bool ok
+string message
+sensor_msgs/PointCloud2 fused
