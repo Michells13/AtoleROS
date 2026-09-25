@@ -2,11 +2,15 @@
 
 Uso (AtoleROS lanzado con sim:=true robot:=vm, entorno ROS cargado):
     python3 tools/tests/test_fase4_mission.py [carpeta] [--all] [--step] [--abort-at ESTADO] [--gripper]
+        [--eih none|single|fused_2view|ppp] [--eih-view VISTA] [--gate M] [--dry]
 
 - Carga la carpeta del dataset, lanza /atole/mission/harvest y registra la secuencia de estados.
 - Al salir de PREPICK y de PICK compara el TCP real con el objetivo que calcula atole_common.grasp
   para el pod elegido (debe coincidir en mm).
 - --step confirma cada paso con /atole/mission/confirm_step; --abort-at aborta al entrar en ese estado.
+- --eih elige la estrategia EiH (por defecto none); --eih-view carga esa vista real de cam2
+  (/atole/sim/load_eih); --gate cambia EIH/CorrelateGateM sin guardarlo (la vista EiH y el dataset
+  EtH son de escenas distintas); --dry = eih_dry_run.
 """
 import sys
 import threading
@@ -16,7 +20,7 @@ import numpy as np
 import rclpy
 from atole_interfaces.action import Harvest
 from atole_interfaces.msg import ArmState, MissionStatus, PodArray, SystemHealth
-from atole_interfaces.srv import LoadDataset
+from atole_interfaces.srv import ConfigSet, LoadDataset
 from rclpy.action import ActionClient
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
@@ -26,8 +30,10 @@ from atole_common import grasp
 from atole_common.config_view import ConfigView
 
 args = sys.argv[1:]
-FOLDER = next((a for a in args if not a.startswith('--') and not a.isupper()), '20260422_144848_954')
-ABORT_AT = args[args.index('--abort-at') + 1] if '--abort-at' in args else None
+opt = lambda name, default=None: args[args.index(name) + 1] if name in args else default
+VALUES = {opt(n) for n in ('--abort-at', '--eih', '--eih-view', '--gate')}
+FOLDER = next((a for a in args if not a.startswith('--') and a not in VALUES), '20260422_144848_954')
+ABORT_AT = opt('--abort-at')
 LATCHED = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL, reliability=ReliabilityPolicy.RELIABLE)
 
 
@@ -38,7 +44,7 @@ def main():
     ex.add_node(node)
     threading.Thread(target=ex.spin, daemon=True).start()
     config = ConfigView(node)
-    seen, checks, data = [], [], {'arm': None, 'pods': None, 'status': None}
+    seen, checks, eih_log, data = [], [], [], {'arm': None, 'pods': None, 'status': None}
     node.create_subscription(ArmState, '/atole/arm/state', lambda m: data.__setitem__('arm', m), LATCHED)
     node.create_subscription(PodArray, '/atole/perception/pods', lambda m: data.__setitem__('pods', m), 10)
     confirm = node.create_client(Trigger, '/atole/mission/confirm_step')
@@ -58,6 +64,8 @@ def main():
     def on_status(m):
         prev = data['status']
         data['status'] = m
+        if m.state == 'EIH_REFINE' and (prev is None or m.message != prev.message):
+            eih_log.append(m.message)
         if prev is None or m.state != prev.state:
             seen.append(m.state)
             pods = data['pods']
@@ -76,6 +84,14 @@ def main():
     load.wait_for_service(timeout_sec=10)
     r = load.call(LoadDataset.Request(folder=FOLDER, rate_hz=2.0))
     print('dataset:', r.message)
+    if opt('--eih-view'):
+        load_eih = node.create_client(LoadDataset, '/atole/sim/load_eih')
+        load_eih.wait_for_service(timeout_sec=10)
+        print('vista EiH:', load_eih.call(LoadDataset.Request(folder=opt('--eih-view'), rate_hz=2.0)).message)
+    if opt('--gate'):
+        cset = node.create_client(ConfigSet, '/atole/config/set')
+        cset.wait_for_service(timeout_sec=10)
+        print('gate EiH:', cset.call(ConfigSet.Request(key='EIH/CorrelateGateM', value=opt('--gate'), persist=False)).message)
     health = {}
     node.create_subscription(SystemHealth, '/atole/system/health', lambda m: health.__setitem__('h', m), LATCHED)
     t_ready = time.monotonic()
@@ -86,7 +102,8 @@ def main():
     client = ActionClient(node, Harvest, '/atole/mission/harvest')
     client.wait_for_server(timeout_sec=10)
     goal = Harvest.Goal(mode=Harvest.Goal.MODE_ALL if '--all' in args else Harvest.Goal.MODE_NEXT,
-                        step_mode='--step' in args, skip_gripper='--gripper' not in args)
+                        step_mode='--step' in args, skip_gripper='--gripper' not in args,
+                        eih_strategy=opt('--eih', 'none'), eih_dry_run='--dry' in args)
     t0 = time.monotonic()
     gf = client.send_goal_async(goal)
     while not gf.done():
@@ -100,6 +117,8 @@ def main():
     print('estados:', ' → '.join(seen))
     for c in checks:
         print('  ', c)
+    for e in eih_log:
+        print('   EiH:', e)
     time.sleep(0.5)                                  # que llegue el último ArmState
     st = data['status']
     print(f'estado final: {st.state} · {st.message}')

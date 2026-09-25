@@ -68,3 +68,26 @@ def cloud_msg(xyz, frame_id, stamp, ids=None):
     msg.data = np.ascontiguousarray(data, np.float32).tobytes()
     msg.header.frame_id, msg.header.stamp = frame_id, stamp
     return msg
+
+
+def cloud_to_array(msg):
+    """PointCloud2 con campos x, y, z float32 (los de cloud_msg) → (N, 3) float32."""
+    names = [f.name for f in msg.fields]
+    data = np.frombuffer(bytes(msg.data), np.float32).reshape(-1, msg.point_step // 4)
+    return np.ascontiguousarray(data[:, [names.index('x'), names.index('y'), names.index('z')]])
+
+
+def pose_to_matrix(p):
+    m = np.eye(4)
+    q = p.orientation
+    m[:3, :3] = Rotation.from_quat([q.x, q.y, q.z, q.w]).as_matrix()
+    m[:3, 3] = [p.position.x, p.position.y, p.position.z]
+    return m
+
+
+def matrix_to_pose(m):
+    from geometry_msgs.msg import Pose
+    p = Pose()
+    p.position = point(m[:3, 3])
+    p.orientation = quaternion(Rotation.from_matrix(m[:3, :3]).as_quat())
+    return p

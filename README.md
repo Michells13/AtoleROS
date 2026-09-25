@@ -38,6 +38,13 @@ https://claude.ai/artifact/LWy6wXZ8wXN6hzgK11eD3j
     de PozoleV3 (`atole_common/grasp.py`). Pruebas en `tools/tests/test_fase4_mission.py`.
   - `arm_driver`: los objetivos articulares se llevan a su equivalente dentro de ±180° (el AUBO acepta
     y no ejecuta, sin error, objetivos fuera de ese rango).
+- **Fase 5 (refinamiento EiH):**
+  - Estrategias SINGLE, FUSED_2VIEW y PPP como los botones de PozoleV3 (`docs/pozolev3_eih.md`):
+    captura de cam2, asociación con el pod EtH, completion con el checkpoint EiH, fusión voxel-merge
+    (`cloud_fusion_node`) y corrección del pre-pick y el pick (`atole_common/eih.py`).
+  - SIM EiH: `/atole/sim/list_eih|load_eih` reproduce 240 vistas reales de cam2 con la pose del TCP grabada.
+  - Paridad (`tools/tests/test_fase5_eih.py`): voxel-merge idéntico bit a bit (20/20 pares PPP) y estimación
+    EiH idéntica a PozoleV3 con la misma nube de entrada.
   - Los servicios y acciones de las fases siguientes siguen respondiendo "no implementado todavía (Fase N)".
 
 ## Compilar

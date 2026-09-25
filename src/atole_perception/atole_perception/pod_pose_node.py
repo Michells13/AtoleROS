@@ -38,7 +38,8 @@ from atole_perception import mask_cloud
 from atole_perception.completion import CompletionPool
 from atole_perception.pca_pose import estimate_pose
 from atole_perception.preprocess import preprocess_for_completion
-from atole_perception.ros_utils import cloud_msg, image_to_array, point, quaternion, transform_to_matrix, vector
+from atole_perception.ros_utils import (cloud_msg, cloud_to_array, image_to_array, matrix_to_pose, point,
+                                         pose_to_matrix, quaternion, transform_to_matrix, vector)
 from atole_perception.superquadric import fit_and_sample
 
 BASE = 'base_link'
@@ -153,56 +154,14 @@ class PodPoseNode(Node):
         cam = g.camera or ('cam2' if g.eih else self.config.get('Cameras/SelectedEtH', 'cam1'))
         eih = g.eih or cam == 'cam2'
 
-        self._feedback(gh, 'capture')
-        frame = self._capture(cam)
-        stamp = frame['depth'].header.stamp
-        T = self._base_from_camera(cam, stamp)
+        if len(g.cloud.data):
+            pods, partials, T, stamp = self._from_cloud(g)
+        else:
+            pods, partials, T, stamp = self._from_camera(gh, g, cam, eih)
         R, t = T[:3, :3], T[:3, 3]
         to_base = lambda p: np.asarray(p, np.float64) @ R.T + t      # (3,) o (N, 3)
-
-        self._feedback(gh, 'detect')
-        dets = self._detect(cam, frame['rgb'])
-        depth = image_to_array(frame['depth'])
-        conf = image_to_array(frame['conf'])
-        k = list(frame['info'].k)
-        h, w = depth.shape
-        cc = self.config.section('Perception/Cloud')
-        ws = self.config.section('Perception/Workspace')
-        f = lambda d, key, default: float(d.get(key, default))
-
-        # ── 3. nube parcial + área de trabajo ──
-        pods, partials = [], {}
-        for det in dets.detections:
-            self._feedback(gh, 'cloud', len(pods), len(dets.detections))
-            pod = Pod(id=len(pods), detection_id=det.id, class_name=det.class_name, score=det.score)
-            mask = mask_cloud.full_mask(image_to_array(det.mask), det.mask_xy, dets.image_height, dets.image_width)
-            refined = mask_cloud.refine_mask(mask_cloud.align_mask(mask, h, w), conf, depth,
-                                             erode_px=int(f(cc, 'MaskErodePx', 4)), conf_thr=f(cc, 'ConfThr', 50),
-                                             grad_thr=f(cc, 'DepthGradThrM', 0.03))
-            pts = mask_cloud.object_points(depth, k, refined, int(f(cc, 'MaxPoints', 20000)))
-            pod.n_partial = len(pts)
-            if len(pts):
-                c = to_base(pts.mean(axis=0))
-                pod.centroid = point(c)
-                reach = float(np.linalg.norm(c))
-                pod.in_workspace = bool(f(ws, 'MinReachM', 0.0) <= reach <= f(ws, 'MaxReachM', 99.0)
-                                        and f(ws, 'MinZ', -99.0) <= c[2] <= f(ws, 'MaxZ', 99.0))
-                pod.status = 'ok' if pod.in_workspace else 'out_of_workspace'
-                partials[pod.id] = pts
-            else:
-                pod.status = 'error: la máscara no deja puntos válidos'
-            pods.append(pod)
-
-        if eih and g.gate_m > 0:        # EiH: solo el pod que corresponde al grasp previsto
-            ref = np.array([g.reference.x, g.reference.y, g.reference.z])
-            cands = [p for p in pods if p.status == 'ok' and p.n_partial >= EIH_MIN_POINTS]
-            best = min(cands, key=lambda p: np.linalg.norm(np.array([p.centroid.x, p.centroid.y, p.centroid.z]) - ref),
-                       default=None)
-            if best is not None and np.linalg.norm(np.array([best.centroid.x, best.centroid.y, best.centroid.z]) - ref) > g.gate_m:
-                best = None
-            for p in pods:
-                if p.status == 'ok' and p is not best:
-                    p.status = 'not_selected'
+        n_exp = np.array([g.expected_axis.x, g.expected_axis.y, g.expected_axis.z])
+        n_exp_cam = R.T @ n_exp / np.linalg.norm(n_exp) if eih and np.linalg.norm(n_exp) > 1e-9 else None
 
         # ── 4. completion → superquadric → PCA ──
         todo = [p for p in pods if p.status == 'ok']
@@ -231,14 +190,20 @@ class PodPoseNode(Node):
                 pod.status = f'error: {e}'
                 self.get_logger().warn(f'pod {pod.id}: {pod.status}')
                 continue
+            base, tip, axis, quat = r.grasp_position, r.tip_position, r.grasp_normal, r.quaternion
+            if n_exp_cam is not None and float(np.dot(axis, n_exp_cam)) < 0:
+                # Regla EiH de PozoleV3 (_eih_correction_estimate_sync): el signo lo decide el eje previsto,
+                # no la regla "Y hacia abajo" de la cámara fija.
+                base, tip, axis = tip, base, -axis
+                quat = Rotation.align_vectors([axis], [[0.0, 0.0, 1.0]])[0].as_quat()
             completed[pod.id] = dense
             pod.n_completed = len(dense)
-            pod.grasp_bottom = point(to_base(r.grasp_position))
-            pod.tip = point(to_base(r.tip_position))
-            pod.grasp_midpoint = point(to_base((r.grasp_position + r.tip_position) / 2.0))
+            pod.grasp_bottom = point(to_base(base))
+            pod.tip = point(to_base(tip))
+            pod.grasp_midpoint = point(to_base((base + tip) / 2.0))
             pod.centroid = point(to_base(r.position))
-            pod.axis = vector(R @ r.grasp_normal)
-            pod.orientation = quaternion((Rotation.from_matrix(R) * Rotation.from_quat(r.quaternion)).as_quat())
+            pod.axis = vector(R @ axis)
+            pod.orientation = quaternion((Rotation.from_matrix(R) * Rotation.from_quat(quat)).as_quat())
             pod.length_m = float(sq['metrics'].get('length_mm', 0.0)) / 1000.0
             pod.width_m = float(r.width_m)
             pod.pose_confidence = float(r.confidence)
@@ -250,7 +215,7 @@ class PodPoseNode(Node):
         out.header.stamp, out.header.frame_id = stamp, BASE
         self.pods_pub.publish(out)
         self._publish_clouds(pods, partials, completed, to_base, stamp)
-        result = EstimatePods.Result(ok=True, pods=out)
+        result = EstimatePods.Result(ok=True, pods=out, camera_pose=matrix_to_pose(T))
         if g.return_clouds:     # una nube por pod, en el mismo orden que pods (vacía si no hay)
             empty = np.zeros((0, 3))
             result.partial_clouds = [cloud_msg(to_base(partials.get(q.id, empty)), BASE, stamp) for q in pods]
@@ -262,6 +227,73 @@ class PodPoseNode(Node):
         self.get_logger().info(result.message)
         gh.succeed()
         return result
+
+    def _from_cloud(self, g):
+        """Un solo pod a partir de la nube dada (marco óptico de la cámara en cloud_camera_pose)."""
+        pts = cloud_to_array(g.cloud).astype(np.float32)
+        T = pose_to_matrix(g.cloud_camera_pose)
+        pod = Pod(id=0, detection_id=-1, class_name='pod', status='ok', in_workspace=True, n_partial=len(pts))
+        if len(pts):
+            pod.centroid = point(T[:3, :3] @ pts.mean(axis=0) + T[:3, 3])
+        else:
+            pod.status = 'error: nube vacía'
+        return [pod], {0: pts}, T, self.get_clock().now().to_msg()
+
+    def _from_camera(self, gh, g, cam, eih):
+        self._feedback(gh, 'capture')
+        frame = self._capture(cam)
+        stamp = frame['depth'].header.stamp
+        T = self._base_from_camera(cam, stamp)
+        R, t = T[:3, :3], T[:3, 3]
+        to_base = lambda p: np.asarray(p, np.float64) @ R.T + t
+
+        self._feedback(gh, 'detect')
+        dets = self._detect(cam, frame['rgb'])
+        depth = image_to_array(frame['depth'])
+        conf = image_to_array(frame['conf'])
+        k = list(frame['info'].k)
+        h, w = depth.shape
+        cc = self.config.section('Perception/Cloud')
+        ws = self.config.section('Perception/Workspace')
+        f = lambda d, key, default: float(d.get(key, default))
+
+        # ── 3. nube parcial + área de trabajo ──
+        pods, partials = [], {}
+        for det in dets.detections:
+            self._feedback(gh, 'cloud', len(pods), len(dets.detections))
+            pod = Pod(id=len(pods), detection_id=det.id, class_name=det.class_name, score=det.score)
+            mask = mask_cloud.full_mask(image_to_array(det.mask), det.mask_xy, dets.image_height, dets.image_width)
+            refined = mask_cloud.refine_mask(mask_cloud.align_mask(mask, h, w), conf, depth,
+                                             erode_px=int(f(cc, 'MaskErodePx', 4)), conf_thr=f(cc, 'ConfThr', 50),
+                                             grad_thr=f(cc, 'DepthGradThrM', 0.03))
+            # EtH: tope de puntos (stride) como _extract_pc_frozen; EiH: todos, como _eih_extract_mask_points.
+            pts = mask_cloud.object_points(depth, k, refined, 10 ** 9 if eih else int(f(cc, 'MaxPoints', 20000)))
+            pod.n_partial = len(pts)
+            if len(pts):
+                c = to_base(pts.mean(axis=0))
+                pod.centroid = point(c)
+                reach = float(np.linalg.norm(c))
+                pod.in_workspace = bool(f(ws, 'MinReachM', 0.0) <= reach <= f(ws, 'MaxReachM', 99.0)
+                                        and f(ws, 'MinZ', -99.0) <= c[2] <= f(ws, 'MaxZ', 99.0))
+                pod.in_workspace = pod.in_workspace or eih          # en EiH manda la asociación con la referencia
+                pod.status = 'ok' if pod.in_workspace else 'out_of_workspace'
+                partials[pod.id] = pts
+            else:
+                pod.status = 'error: la máscara no deja puntos válidos'
+            pods.append(pod)
+
+        if eih and g.gate_m > 0:        # EiH: solo el pod que corresponde al grasp previsto
+            ref = np.array([g.reference.x, g.reference.y, g.reference.z])
+            cands = [p for p in pods if p.status == 'ok' and p.n_partial >= EIH_MIN_POINTS]
+            best = min(cands, key=lambda p: np.linalg.norm(np.array([p.centroid.x, p.centroid.y, p.centroid.z]) - ref),
+                       default=None)
+            if best is not None and np.linalg.norm(np.array([best.centroid.x, best.centroid.y, best.centroid.z]) - ref) > g.gate_m:
+                best = None
+            for p in pods:
+                if p.status == 'ok' and p is not best:
+                    p.status = 'not_selected'
+
+        return pods, partials, T, stamp
 
     def _publish_clouds(self, pods, partials, completed, to_base, stamp):
         for pub, clouds in ((self.partial_pub, partials), (self.completed_pub, completed)):

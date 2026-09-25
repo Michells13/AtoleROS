@@ -1,7 +1,11 @@
-sensor_msgs/PointCloud2[] clouds   # cada una con su frame_id y stamp de captura
-string target_frame
-float64 voxel_m
+# Fusión voxel-merge de las vistas EiH (PozoleV3 _voxel_merge): las nubes se expresan en el marco de la
+# cámara de referencia, se apilan en orden (la primera vista gana en cada vóxel) y se queda un punto por
+# vóxel de voxel_m, con la rejilla anclada en el origen de ese marco.
+sensor_msgs/PointCloud2[] clouds         # en base_link, en orden de captura
+geometry_msgs/Pose target_camera_pose    # base_link ← cámara de referencia (la última vista en PozoleV3)
+float64 voxel_m                          # 0 = EIH/FuseVoxelM
 ---
 bool ok
 string message
-sensor_msgs/PointCloud2 fused
+sensor_msgs/PointCloud2 fused            # en el marco de la cámara de referencia
+uint32 n_fused

@@ -2,9 +2,10 @@ uint8 MODE_ALL=0
 uint8 MODE_NEXT=1
 uint8 mode
 bool step_mode                     # confirmar antes de cada movimiento del robot
-string eih_strategy                # single | fused_2view | ppp ("" = Config.xml)
+string eih_strategy                # none | single | fused_2view | ppp ("" = Config.xml)
 string selection_strategy          # "" = Config.xml
 bool skip_gripper                  # pruebas: no mueve el gripper (CLOSE/ROTATE/OPEN se saltan)
+bool eih_dry_run                   # pruebas: si el refinamiento EiH falla, sigue con la pose EtH en vez de abortar
 ---
 bool ok
 string message

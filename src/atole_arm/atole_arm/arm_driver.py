@@ -24,12 +24,13 @@ from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallb
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
 from std_srvs.srv import SetBool, Trigger
-from tf2_ros import StaticTransformBroadcaster
+
 
 from atole_arm.aubo_client import AuboClient, AuboError, MockAubo
 from atole_arm.poses import (aubo_to_pose, facing_offset_deg, pick_facing, pose_to_aubo,
                              rotate_about_tool_z, wrap, FACING_MAX_DEG)
 from atole_common.config_view import ConfigView
+from atole_common.static_tf import StaticTf
 from atole_common.qos import LATCHED
 from atole_common.stubs import run_node
 
@@ -76,7 +77,7 @@ class ArmDriver(Node):
         self.joint_pub = self.create_publisher(JointState, '/joint_states', 10)
         self.state_pub = self.create_publisher(ArmState, '/atole/arm/state', LATCHED)
         self.fault_pub = self.create_publisher(ArmState, '/atole/arm/fault', LATCHED)
-        self.tf_static = StaticTransformBroadcaster(self)
+        self.tf_static = StaticTf(self)
         self.config_set = self.create_client(ConfigSet, '/atole/config/set', callback_group=cmd_group)
 
         for action_type, name, execute in ((MoveJoints, 'move_joints', self._exec_joints),

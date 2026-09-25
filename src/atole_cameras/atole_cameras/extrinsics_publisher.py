@@ -7,6 +7,7 @@ Config.xml guarda, por cámara, la matriz parent ← marco óptico (convención 
   así que aquí se publica parent → <cam>_camera_link = T(parent←óptico) · T(link←óptico)⁻¹. El resultado
   es que base_link → óptico coincide exactamente con la matriz calibrada.
 - Modo SIM: no hay cadena de la ZED; se publica parent → <cam>_left_camera_frame_optical directamente.
+  cam2 no: su TF lo publica dataset_player con la pose del TCP grabada en cada vista EiH.
 - Solo se publica la calibración si su serial coincide con el de la cámara en Config.xml.
 
 Además se publica parent → <cam>_calibrated_optical = matriz calibrada, exacta y con un único
@@ -20,9 +21,10 @@ from geometry_msgs.msg import TransformStamped
 from rclpy.node import Node
 from rclpy.time import Time
 from scipy.spatial.transform import Rotation
-from tf2_ros import Buffer, StaticTransformBroadcaster, TransformListener
+from tf2_ros import Buffer, TransformListener
 
 from atole_common.config_view import ConfigView
+from atole_common.static_tf import StaticTf
 from atole_common.stubs import run_node
 
 CAMERAS = ('cam0', 'cam1', 'camC', 'cam2')
@@ -52,7 +54,7 @@ class ExtrinsicsPublisher(Node):
         self.sim = self.declare_parameter('sim', False).value
         self.tf_buffer = Buffer()
         TransformListener(self.tf_buffer, self)
-        self.broadcaster = StaticTransformBroadcaster(self)
+        self.broadcaster = StaticTf(self)
         self.published = {}          # cam -> matriz publicada
         self.warned = set()
         self.config = ConfigView(self, on_update=lambda _c: self.published.clear())
@@ -74,6 +76,8 @@ class ExtrinsicsPublisher(Node):
             return
         stamp = self.get_clock().now().to_msg()
         for cam in CAMERAS:
+            if self.sim and cam == 'cam2':
+                continue             # en SIM el TF de cam2 sale de la pose grabada (dataset_player)
             matrix, parent, problem = self._calibration(cam)
             if problem:
                 if cam not in self.warned:

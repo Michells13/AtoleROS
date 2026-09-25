@@ -3,12 +3,16 @@ bool eih                           # true = checkpoints y modelo EiH
 geometry_msgs/Point reference      # EiH: grasp previsto (asocia la detección más cercana)
 float64 gate_m                     # EiH: distancia máxima a la referencia
 bool return_clouds
+geometry_msgs/Vector3 expected_axis     # EiH: eje previsto (base_link); si el estimado apunta al revés se invierte (base↔punta)
+sensor_msgs/PointCloud2 cloud           # opcional: estimar sobre esta nube (p. ej. la fusionada) sin capturar ni detectar
+geometry_msgs/Pose cloud_camera_pose    # base_link ← cámara en cuyo marco óptico viene `cloud`
 ---
 bool ok
 string message
 PodArray pods
 sensor_msgs/PointCloud2[] partial_clouds
 sensor_msgs/PointCloud2[] completed_clouds
+geometry_msgs/Pose camera_pose          # base_link ← cámara en la captura
 ---
 string stage                       # capture | detect | cloud | completion | superquadric | pca
 uint32 done                        # pods terminados en esta etapa

@@ -1,8 +1,16 @@
 """mission_manager — secuencia automática de cosecha (acción /atole/mission/harvest).
 
 Ciclo (empieza y termina en Home2):
-    HOME2 → DETECT (estimate_pods EtH) → SELECT (pod_selector, IK de frente) → EIH_REFINE (Fase 5)
-    → PREPICK → PICK → CLOSE → ROTATE → RETREAT → RELEASE → HOME2 …
+    HOME2 → DETECT (estimate_pods EtH) → SELECT (pod_selector, IK de frente) → PREPICK → EIH_REFINE
+    → PICK → CLOSE → ROTATE → RETREAT → RELEASE → HOME2 …
+- Refinamiento EiH (goal.eih_strategy o EIH/Strategy), como los botones de PozoleV3 (docs/pozolev3_eih.md):
+    single       en el pre-pick EtH: una captura de cam2 y el pre-pick corregido.
+    fused_2view  vista 1 → pre-pick corregido (o +FuseBaselineM en Y) → vista 2 → fusión → estimación.
+    ppp          sustituye al pre-pick EtH: pre-pre-pick (hacia Home2, apuntando al pod) → vista 1 →
+                 pre-pick → vista 2 → fusión → estimación → pre-pick corregido.
+    none         sin refinamiento.
+  La corrección reemplaza la posición y gira la orientación como mucho EIH/MaxAngleDeg (atole_common.eih).
+  Si falla, la misión se aborta; con goal.eih_dry_run se sigue con la pose EtH (pruebas).
 - Modo "todos": repite hasta que no quedan pods alcanzables. Modo "siguiente": un pod.
 - Pods ya intentados (a menos de ATTEMPTED_RADIUS_M) no se vuelven a elegir.
 - Paso a paso (goal.step_mode o /atole/mission/set_step_mode): antes de cada movimiento del robot se
@@ -20,13 +28,16 @@ import threading
 import numpy as np
 from atole_interfaces.action import EstimatePods, GripperCommand, Harvest, MoveJoints, MovePose
 from atole_interfaces.msg import ArmState, MissionStatus, SystemHealth
-from atole_interfaces.srv import AcquireControl, SelectPod
+from atole_interfaces.srv import AcquireControl, ComputeFk, FuseViews, SelectPod
 from rclpy.action import ActionClient, ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.node import Node
+from rclpy.time import Time
+from scipy.spatial.transform import Rotation
 from std_srvs.srv import SetBool, Trigger
+from tf2_ros import Buffer, TransformListener
 
-from atole_common import grasp
+from atole_common import eih, grasp
 from atole_common.config_view import ConfigView
 from atole_common.qos import LATCHED
 from atole_common.stubs import run_node
@@ -69,6 +80,11 @@ class MissionManager(Node):
         self.select = self.create_client(SelectPod, '/atole/task_planning/select_pod', callback_group=group)
         self.acquire = self.create_client(AcquireControl, '/atole/arm/acquire_control', callback_group=group)
         self.arm_stop = self.create_client(Trigger, '/atole/arm/stop', callback_group=group)
+        self.fk = self.create_client(ComputeFk, '/atole/arm/compute_fk', callback_group=group)
+        self.fuse = self.create_client(FuseViews, '/atole/perception/fuse_views', callback_group=group)
+        self.tf_buffer = Buffer()
+        TransformListener(self.tf_buffer, self)
+        self.dry_run = False
         ActionServer(self, Harvest, '/atole/mission/harvest', execute_callback=self._execute,
                      goal_callback=lambda _g: GoalResponse.REJECT if self.busy else GoalResponse.ACCEPT,
                      cancel_callback=self._on_cancel, callback_group=group)
@@ -231,14 +247,167 @@ class MissionManager(Node):
         self._set(message=res.message, pods_remaining=reachable)
         return (res.evaluated.pods[res.selected_index] if res.selected_index >= 0 else None), reachable
 
+    # ───────────────────────── refinamiento EiH ─────────────────────────
+    def _e(self, key, default):
+        return self.config.get_float(f'EIH/{key}', default)
+
+    def _tcp(self):
+        p = self.arm.tcp_pose
+        return (np.array([p.position.x, p.position.y, p.position.z]),
+                np.array([p.orientation.x, p.orientation.y, p.orientation.z, p.orientation.w]))
+
+    def _estimate_eih(self, goal, what):
+        goal.camera, goal.eih = 'cam2', True
+        try:
+            res = run_action(self.estimate, goal, 300.0, cancel=self.cancel)
+        except CallError as e:
+            if self.cancel.is_set():
+                raise Aborted('misión abortada')
+            raise MissionError(f'EiH {what}: {e}')
+        if not res.ok:
+            raise MissionError(f'EiH {what}: {res.message}')
+        return res
+
+    def _eih_capture(self, what, reference, expected_axis):
+        """Espera a que el robot se asiente y estima el pod de cam2 asociado a la referencia."""
+        self._set(message=f'EiH {what}: asentando {self._e("SettleS", 0.4):.1f} s y capturando cam2')
+        self._sleep(self._e('SettleS', 0.4))
+        gate = self._e('CorrelateGateM', 0.20)
+        res = self._estimate_eih(EstimatePods.Goal(reference=reference, gate_m=gate, return_clouds=True,
+                                                   expected_axis=expected_axis), what)
+        ok = [i for i, p in enumerate(res.pods.pods) if p.status == 'ok']
+        if not ok:
+            why = sorted({p.status.split(':')[0] for p in res.pods.pods}) or ['sin detecciones']
+            raise MissionError(f'EiH {what}: ningún pod de cam2 a menos de {gate:.2f} m del previsto ({", ".join(why)})')
+        i = ok[0]
+        return res.pods.pods[i], res.partial_clouds[i], res.camera_pose
+
+    def _eih_move(self, pod, what):
+        """Mueve al pre-pick del pod (moveL) si está a más de 4 mm. Devuelve si se movió."""
+        pos, quat = grasp.targets(pod, self.config.section('Harvest'))['pre']
+        dist = float(np.linalg.norm(pos - self._tcp()[0]))
+        if dist <= 0.004:
+            return False
+        limit = self._e('MaxMoveM', 0.0)
+        if limit > 0 and dist > limit:
+            raise MissionError(f'EiH: la corrección pide moverse {dist * 1000:.0f} mm (> EIH/MaxMoveM {limit * 1000:.0f} mm)')
+        self._gate(what)
+        self._move_cartesian(what, pos, quat, 'moveL', self._h('SpeedApproach', 0.15))
+        return True
+
+    def _eih_fused_estimate(self, clouds, camera_pose, expected_axis, reference):
+        try:
+            fused = call(self.fuse, FuseViews.Request(clouds=clouds, target_camera_pose=camera_pose), timeout=30.0)
+        except CallError as e:
+            raise MissionError(f'EiH fusión: {e}')
+        if not fused.ok:
+            raise MissionError(f'EiH fusión: {fused.message}')
+        self._set(message=f'EiH fusión: {fused.message}')
+        res = self._estimate_eih(EstimatePods.Goal(cloud=fused.fused, cloud_camera_pose=camera_pose,
+                                                   expected_axis=expected_axis), 'nube fusionada')
+        pod = res.pods.pods[0]
+        if pod.status != 'ok':
+            raise MissionError(f'EiH nube fusionada: {pod.status}')
+        mid = np.array([pod.grasp_midpoint.x, pod.grasp_midpoint.y, pod.grasp_midpoint.z])
+        ref = np.array([reference.x, reference.y, reference.z])
+        gate = self._e('CorrelateGateM', 0.20)
+        if np.linalg.norm(mid - ref) > gate:
+            raise MissionError(f'EiH nube fusionada: el pod estimado está a {np.linalg.norm(mid - ref):.2f} m del previsto')
+        return pod
+
+    def _t_tcp_cam2(self):
+        """TCP ← cam2 = (tool0 ← tcp)⁻¹ · (tool0 ← cam2 de Config.xml)."""
+        x = np.array([float(v) for v in self.config.get('Calibrations/cam2/Matrix', '').split()]).reshape(4, 4)
+        try:
+            t = self.tf_buffer.lookup_transform('tool0', 'tcp', Time()).transform
+        except Exception:
+            return x
+        m = np.eye(4)
+        m[:3, :3] = Rotation.from_quat([t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w]).as_matrix()
+        m[:3, 3] = [t.translation.x, t.translation.y, t.translation.z]
+        return np.linalg.inv(m) @ x
+
+    def _eih_refine(self, pod, strategy):
+        """Pod corregido por cam2; el robot termina en su pre-pick."""
+        cap = self._e('MaxAngleDeg', 15.0)
+        if strategy == 'single':
+            e1, _, _ = self._eih_capture('vista única', pod.grasp_bottom, pod.axis)
+            corrected, info = eih.correct_pod(pod, e1, cap)
+            self._eih_move(corrected, 'pre-pick corregido')
+            return corrected, info
+        if strategy == 'fused_2view':
+            e1, cloud1, _ = self._eih_capture('vista 1', pod.grasp_bottom, pod.axis)
+            first, _ = eih.correct_pod(pod, e1, cap)
+            if not self._eih_move(first, 'pre-pick corregido (vista 1)'):
+                pos, quat = self._tcp()        # sin corrección que mover: separa las vistas en Y
+                self._gate('separar la vista 2')
+                self._move_cartesian('vista 2', pos + [0.0, self._e('FuseBaselineM', 0.03), 0.0], quat, 'moveL',
+                                     self._h('SpeedApproach', 0.15))
+            _e2, cloud2, pose2 = self._eih_capture('vista 2', first.grasp_bottom, first.axis)
+            fused = self._eih_fused_estimate([cloud1, cloud2], pose2, first.axis, first.grasp_bottom)
+            corrected, info = eih.correct_pod(first, fused, cap)
+            self._eih_move(corrected, 'pre-pick corregido')
+            return corrected, info
+        if strategy == 'ppp':
+            harvest = self.config.section('Harvest')
+            pre_pos, pre_quat = grasp.targets(pod, harvest)['pre']
+            try:
+                home2 = call(self.fk, ComputeFk.Request(joints=self._joints('Home2')), timeout=5.0)
+            except CallError as e:
+                raise MissionError(f'PPP: FK de Home2: {e}')
+            h2 = home2.tcp.pose.position
+            g0 = np.array([pod.grasp_bottom.x, pod.grasp_bottom.y, pod.grasp_bottom.z])
+            ppp = self.config.section('EIH/PPP')
+            pos, quat, info = eih.ppp_pose(pre_pos, pre_quat, g0, [h2.x, h2.y], self._t_tcp_cam2(),
+                                           offset_m=float(ppp.get('OffsetM', 0.10)),
+                                           toward_home2=ppp.get('TowardHome2', 'true') == 'true',
+                                           aim=ppp.get('AimCentroid', 'true') == 'true',
+                                           max_tilt_deg=float(ppp.get('MaxTiltDeg', 35.0)))
+            self._set(message=f'PPP: pre-pre-pick a {np.linalg.norm(pos - pre_pos) * 100:.0f} cm del pre-pick, '
+                              f'inclinado {info["tilt_deg"]:.1f}°' + (' (limitado)' if info['clamped'] else ''))
+            self._gate('mover al pre-pre-pick')
+            self._move_cartesian('pre-pre-pick', pos, quat, self.config.get('Harvest/MovePrepick', 'moveJ_IK'),
+                                 self._h('SpeedApproach', 0.15))
+            _e1, cloud1, _ = self._eih_capture('vista 1 (pre-pre-pick)', pod.grasp_bottom, pod.axis)
+            self._gate('mover al pre-pick')
+            self._move_cartesian('pre-pick', pre_pos, pre_quat, 'moveL', self._h('SpeedApproach', 0.15))
+            _e2, cloud2, pose2 = self._eih_capture('vista 2 (pre-pick)', pod.grasp_bottom, pod.axis)
+            fused = self._eih_fused_estimate([cloud1, cloud2], pose2, pod.axis, pod.grasp_bottom)
+            corrected, info = eih.correct_pod(pod, fused, cap)
+            self._eih_move(corrected, 'pre-pick corregido')
+            return corrected, info
+        raise MissionError(f'estrategia EiH desconocida "{strategy}" (none | single | fused_2view | ppp)')
+
+    def _refine_or_fallback(self, pod, strategy):
+        self._set('EIH_REFINE', f'refinamiento EiH ({strategy}) del pod {pod.id}')
+        try:
+            corrected, info = self._eih_refine(pod, strategy)
+        except MissionError as e:
+            if not self.dry_run:
+                raise
+            self._set(message=f'{e} → eih_dry_run: se sigue con la pose EtH')
+            pos, quat = grasp.targets(pod, self.config.section('Harvest'))['pre']
+            self._gate('volver al pre-pick EtH')
+            self._move_cartesian('pre-pick EtH', pos, quat, self.config.get('Harvest/MovePrepick', 'moveJ_IK'),
+                                 self._h('SpeedApproach', 0.15))
+            return pod
+        self._set(message=f'EiH ({strategy}): corrección {info["correction_m"] * 1000:.1f} mm, '
+                          f'eje girado {info["angle_raw_deg"]:.1f}°' + (f' (aplicado {info["angle_deg"]:.0f}°)' if info['capped'] else ''))
+        return corrected
+
+    # ───────────────────────── un pod ─────────────────────────
     def _harvest_pod(self, pod, eih_strategy):
-        self._set('EIH_REFINE', f'EiH ({eih_strategy}) llega en la Fase 5: se usa la pose EtH', current_pod_id=pod.id)
-        t = grasp.targets(pod, self.config.section('Harvest'))
+        self._set(current_pod_id=pod.id)
         speed_approach = self._h('SpeedApproach', 0.15)
-        self._set('PREPICK', f'pre-pick del pod {pod.id}')
-        self._gate(f'pre-pick del pod {pod.id}')
-        self._move_cartesian('pre-pick', *t['pre'], self.config.get('Harvest/MovePrepick', 'moveJ_IK'), speed_approach)
-        self._sleep(self._h('StepDelayS', 1.0))
+        if eih_strategy != 'ppp':                 # PPP hace su propio recorrido hasta el pre-pick
+            t = grasp.targets(pod, self.config.section('Harvest'))
+            self._set('PREPICK', f'pre-pick del pod {pod.id}')
+            self._gate(f'pre-pick del pod {pod.id}')
+            self._move_cartesian('pre-pick', *t['pre'], self.config.get('Harvest/MovePrepick', 'moveJ_IK'), speed_approach)
+            self._sleep(self._h('StepDelayS', 1.0))
+        if eih_strategy != 'none':
+            pod = self._refine_or_fallback(pod, eih_strategy)
+        t = grasp.targets(pod, self.config.section('Harvest'))
         self._set('PICK', f'pick del pod {pod.id}')
         self._gate(f'pick del pod {pod.id}')
         self._move_cartesian('pick', *t['pick'], self.config.get('Harvest/MovePick', 'moveL'), self._h('SpeedPick', 0.05))
@@ -263,7 +432,7 @@ class MissionManager(Node):
         g = gh.request
         self.busy, self._gh = True, gh
         self.cancel.clear()
-        self.attempted, self.skip_gripper = [], g.skip_gripper
+        self.attempted, self.skip_gripper, self.dry_run = [], g.skip_gripper, g.eih_dry_run
         harvested = failed = 0
         mode = 'next' if g.mode == Harvest.Goal.MODE_NEXT else 'all'
         eih = g.eih_strategy or self.config.get('EIH/Strategy', 'single')

@@ -81,7 +81,7 @@
   </Harvest>
 
   <EIH>
-    <Strategy>single</Strategy>  <!-- single | fused_2view | ppp -->
+    <Strategy>single</Strategy>  <!-- none | single | fused_2view | ppp -->
     <SettleS>0.4</SettleS>
     <CorrelateGateM>0.20</CorrelateGateM>
     <MaxMoveM>0.0</MaxMoveM>       <!-- 0 = sin límite -->
@@ -124,5 +124,5 @@
     <ChArUco><Rows>8</Rows><Cols>8</Cols><SquareM>0.0254</SquareM><MarkerM>0.01905</MarkerM><Dictionary>DICT_4X4_50</Dictionary></ChArUco>
   </Calibration>
 
-  <Sim><DatasetDir>/home/user/Documents/Corvus/datasets/Itabuna_plus</DatasetDir><RateHz>2.0</RateHz></Sim>
+  <Sim><DatasetDir>/home/user/Documents/Corvus/datasets/Itabuna_plus</DatasetDir><EihRoot>/home/user/Documents/Corvus/datasets</EihRoot><RateHz>2.0</RateHz></Sim>
 </Atole>
