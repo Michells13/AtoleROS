@@ -12,6 +12,9 @@
   <exec_depend>atole_common</exec_depend>
 
   <exec_depend>zed_msgs</exec_depend>
+  <exec_depend>zed_wrapper</exec_depend>
+  <exec_depend>rclcpp_components</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>python3-scipy</exec_depend>

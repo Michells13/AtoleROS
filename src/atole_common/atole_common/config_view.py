@@ -1,4 +1,6 @@
 """Vista de solo lectura de Config.xml, alimentada por /atole/config (config_manager)."""
+import threading
+
 from atole_interfaces.msg import ConfigSnapshot
 
 from atole_common.qos import LATCHED
@@ -13,17 +15,23 @@ class ConfigView:
         self._values = {}
         self.version = 0
         self._on_update = on_update
+        self._received = threading.Event()
         node.create_subscription(ConfigSnapshot, CONFIG_TOPIC, self._callback, LATCHED)
 
     def _callback(self, msg):
         self._values = {kv.key: kv.value for kv in msg.entries}
         self.version = msg.version
+        self._received.set()
         if self._on_update:
             self._on_update(self)
 
     @property
     def ready(self):
         return bool(self._values)
+
+    def wait_ready(self, timeout=10.0):
+        """Espera a la primera configuración (los servicios pueden llegar antes que el topic latched)."""
+        return self._received.wait(timeout)
 
     def get(self, key, default=None):
         return self._values.get(key, default)

@@ -19,7 +19,17 @@ https://claude.ai/artifact/LWy6wXZ8wXN6hzgK11eD3j
     solo si coincide el serial). Es el marco de referencia para la percepción.
   - `dataset_player` (`sim:=true`): `/atole/sim/list|load|stop` publica un dataset EtH
     (cam0 + cam1, el mismo de PozoleV3) con los mismos topics, marcos y stamps que la ZED.
-  - Los servicios y acciones del resto de nodos siguen respondiendo "no implementado todavía (Fase N)".
+- **Fase 3 (percepción EtH/EiH):**
+  - `detector_node`: Mask R-CNN (torchvision) con el modelo de Config.xml; cam2 usa el modelo EiH.
+    `detect_once` (con imagen opcional), detección continua y warm-up.
+  - `pod_pose_node`: acción `estimate_pods` → frame sincronizado → máscaras → nube parcial →
+    filtro de área de trabajo → AdaPoinTr → superquadric → PCA → pods en `base_link`. Publica
+    pods, nubes (parcial y completada) y marcadores.
+  - Warm-up al arrancar (Mask R-CNN y AdaPoinTr, EtH y EiH): el sistema no pasa a READY hasta que termina.
+  - Paridad con PozoleV3 (`tools/tests/test_fase3_parity.py`, 43 detecciones): detecciones, scores
+    y máscaras idénticos; pose ≤ 1.1 mm y 0.8°, diferencia que viene solo de reconstruir la nube desde
+    profundidad + K (con la misma nube: 0.001 mm y 0.05°, ruido de GPU).
+  - Los servicios y acciones de las fases siguientes siguen respondiendo "no implementado todavía (Fase N)".
 
 ## Compilar
 ```bash

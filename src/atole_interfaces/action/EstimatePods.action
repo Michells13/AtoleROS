@@ -1,4 +1,4 @@
-string camera                      # EtH activa, cam2 o sim
+string camera                      # cam0 | cam1 | camC | cam2 ("" = EtH seleccionada)
 bool eih                           # true = checkpoints y modelo EiH
 geometry_msgs/Point reference      # EiH: grasp previsto (asocia la detección más cercana)
 float64 gate_m                     # EiH: distancia máxima a la referencia
@@ -10,6 +10,6 @@ PodArray pods
 sensor_msgs/PointCloud2[] partial_clouds
 sensor_msgs/PointCloud2[] completed_clouds
 ---
-string stage                       # capture | detect | workspace | completion | superquadric | pca
-uint32 done
+string stage                       # capture | detect | cloud | completion | superquadric | pca
+uint32 done                        # pods terminados en esta etapa
 uint32 total

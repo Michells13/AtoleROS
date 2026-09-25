@@ -1,5 +1,6 @@
-string camera                      # cámara activa o "sim"
+string camera                      # cam0 | cam1 | camC | cam2 ("" = EtH seleccionada); cam2 usa el modelo EiH
 bool include_masks
+sensor_msgs/Image image            # opcional: detectar sobre este frame (bgra8/bgr8/rgb8) en vez del último de la cámara
 ---
 bool ok
 string message

@@ -1,17 +1,21 @@
 """system_monitor — checks de arranque y salud continua del sistema.
 
 Publica /atole/system/health (latched) cada segundo.
-Robot, gripper, calibraciones y cámaras (streaming por heartbeat; en SIM, las del dataset). El warm-up de
-percepción (Fase 3) aparece como UNKNOWN hasta que exista.
+Robot, gripper, calibraciones, cámaras (streaming por heartbeat; en SIM, las del dataset) y warm-up
+de percepción: al arrancar (Perception/WarmupOnStart) llama a los warm-up de detector_node
+(Mask R-CNN EtH y EiH) y pod_pose_node (workers AdaPoinTr EtH y EiH). Hasta que terminan, el
+sistema no pasa a READY.
 """
 from atole_interfaces.msg import ArmState, CameraStatus, GripperState, HealthItem, SystemHealth
 from rclpy.node import Node
+from std_srvs.srv import Trigger
 
 from atole_common.config_view import ConfigView
 from atole_common.qos import LATCHED
 from atole_common.stubs import run_node
 
 OK, WARN, ERROR, UNKNOWN = HealthItem.OK, HealthItem.WARN, HealthItem.ERROR, HealthItem.UNKNOWN
+WARMUPS = {'detector': '/atole/perception/detector/warmup', 'pod_pose': '/atole/perception/pod_pose/warmup'}
 
 
 class SystemMonitor(Node):
@@ -25,6 +29,8 @@ class SystemMonitor(Node):
         self.create_subscription(ArmState, '/atole/arm/state', lambda m: setattr(self, 'arm', m), LATCHED)
         self.create_subscription(GripperState, '/atole/gripper/state', lambda m: setattr(self, 'gripper', m), LATCHED)
         self.create_subscription(CameraStatus, '/atole/cameras/status', lambda m: setattr(self, 'cameras', m), LATCHED)
+        self.warmup = {}         # nombre -> None (en curso) | (ok, mensaje)
+        self.warmup_clients = {name: self.create_client(Trigger, srv) for name, srv in WARMUPS.items()}
         self.create_timer(1.0, self._publish)
         self.get_logger().info('system_monitor listo')
 
@@ -94,6 +100,32 @@ class SystemMonitor(Node):
             items.append(HealthItem(name=f'calib_{cam}', level=level, message=text))
         return items
 
+    def _warmup(self):
+        if not self.config.ready:
+            return HealthItem(name='warmup', level=WARN, message='esperando configuración')
+        if not self.config.get_bool('Perception/WarmupOnStart', True):
+            return HealthItem(name='warmup', level=UNKNOWN, message='desactivado (Perception/WarmupOnStart)')
+        for name, client in self.warmup_clients.items():      # se lanza una sola vez, cuando el servicio aparece
+            if name not in self.warmup and client.service_is_ready():
+                self.warmup[name] = None
+                client.call_async(Trigger.Request()).add_done_callback(lambda f, n=name: self._warmup_done(n, f))
+        pending = [n for n in WARMUPS if self.warmup.get(n) is None]
+        failed = [r[1] for r in self.warmup.values() if r and not r[0]]
+        if failed:
+            return HealthItem(name='warmup', level=ERROR, message=' · '.join(failed))
+        if pending:
+            waiting = [n for n in pending if n not in self.warmup]
+            return HealthItem(name='warmup', level=WARN, message='calentando: ' + ', '.join(pending)
+                              + (f' (esperando servicio de {", ".join(waiting)})' if waiting else ''))
+        return HealthItem(name='warmup', level=OK, message=' · '.join(r[1] for r in self.warmup.values()))
+
+    def _warmup_done(self, name, future):
+        try:
+            res = future.result()
+            self.warmup[name] = (res.success, res.message)
+        except Exception as e:
+            self.warmup[name] = (False, f'{name}: {e}')
+
     def _publish(self):
         items = [HealthItem(name='config', level=OK if self.config.ready else ERROR,
                             message=f'versión {self.config.version}' if self.config.ready else 'sin /atole/config')]
@@ -104,7 +136,7 @@ class SystemMonitor(Node):
         if self.config.ready:
             items += self._calibrations()
         items += self._cameras()
-        items.append(HealthItem(name='warmup', level=UNKNOWN, message='warm-up de percepción en la Fase 3'))
+        items.append(self._warmup())
 
         checked = [i for i in items if i.level != UNKNOWN]
         errors = [i for i in checked if i.level == ERROR]

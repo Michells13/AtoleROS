@@ -1,6 +1,7 @@
 # Un pod con su pose estimada (completion -> superquadric -> PCA).
 int32 id
 int32 detection_id
+string status                      # ok | out_of_workspace | not_selected | error: <motivo>
 string class_name                  # "pod" hoy; clases de madurez con el modelo de ripeness
 float32 score                      # confianza de la detección
 float32 pose_confidence

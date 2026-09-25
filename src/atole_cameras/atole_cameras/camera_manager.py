@@ -5,12 +5,14 @@ Cada cámara se lanza con el launch oficial de zed-ros2-wrapper en su propio gru
 publish_urdf:=true (la cadena <id>_camera_link → … → óptico la necesita la estabilización de
 profundidad y es donde cuelga la calibración), publish_tf:=false, sin positional tracking propio.
 
-- Detecta las cámaras conectadas con pyzed (serial → id según Config.xml).
+- Detecta las cámaras conectadas con pyzed (serial → id según Config.xml) al arrancar, al cambiar de EtH
+  y cuando falta una cámara que debería estar activa (que entonces se rearranca).
 - "streaming" = llega su /status/heartbeat.
 - Cambiar de EtH: SIGINT al grupo de la cámara anterior (la ZED tarda ~15 s en cerrarse),
   SIGKILL si no responde en 25 s, y luego se lanza la nueva. La selección se guarda en Config.xml.
 - Con sim:=true no lanza cámaras (las publica dataset_player).
 """
+import json
 import os
 import signal
 import subprocess
@@ -37,6 +39,29 @@ HEARTBEAT_TIMEOUT_S = 3.0
 LOG_DIR = Path.home() / '.ros' / 'log'
 
 
+LIST_DEVICES = ('import json, pyzed.sl as sl; '
+                'print(json.dumps({str(d.serial_number): str(d.camera_model) for d in sl.Camera.get_device_list()}))')
+
+
+def list_zed_devices():
+    """{serial: modelo} con pyzed en un subproceso: así la conexión con nvargus-daemon se cierra al
+    terminar (en este proceso quedaría abierta para siempre) y un fallo de pyzed no tumba el nodo."""
+    out = subprocess.run(['python3', '-c', LIST_DEVICES], capture_output=True, text=True, timeout=30)
+    if out.returncode != 0:
+        raise RuntimeError(out.stderr.strip().splitlines()[-1] if out.stderr.strip() else f'código {out.returncode}')
+    return json.loads(out.stdout.strip().splitlines()[-1])
+
+
+def container_name(cam):
+    return f'zed_container_{cam}'
+
+
+def foreign_containers(cam):
+    """PIDs de contenedores ZED de esta cámara que ya están corriendo (de cualquier proceso)."""
+    out = subprocess.run(['pgrep', '-f', f'__node:={container_name(cam)}( |$)'], capture_output=True, text=True).stdout
+    return out.split()
+
+
 class CameraManager(Node):
 
     def __init__(self):
@@ -50,6 +75,8 @@ class CameraManager(Node):
         self.swapping = False
         self._lock = threading.RLock()
         self._started = False
+        self._startup_done = False
+        self._eth = None             # EtH elegida en este proceso (Config.xml se actualiza de forma asíncrona)
         group = ReentrantCallbackGroup()
         self.status_pub = self.create_publisher(CameraStatus, '/atole/cameras/status', LATCHED)
         self.config_set = self.create_client(ConfigSet, '/atole/config/set', callback_group=group)
@@ -63,7 +90,7 @@ class CameraManager(Node):
                                      lambda _m, cam=cam: self.heartbeats.__setitem__(cam, time.monotonic()), 10)
         self.config = ConfigView(self, on_update=self._on_config)
         self.create_timer(1.0, self._publish_status, callback_group=group)
-        self.create_timer(10.0, self._detect, callback_group=group)
+        self.create_timer(10.0, self._detect_if_missing, callback_group=group)
         self.get_logger().info(f'camera_manager arrancado (fuente: {"sim" if self.sim else "cámaras reales"})')
 
     # ───────────────────────── configuración y arranque ─────────────────────────
@@ -84,24 +111,50 @@ class CameraManager(Node):
         for cam in (eth, 'cam2'):
             error = self._can_start(cam)
             if error:
-                self.get_logger().error(f'no se arranca {cam}: {error}')
-            else:
-                self._start(cam)
+                self.get_logger().error(f'no se arranca {cam}: {error} (se reintenta al detectarla)')
+                continue
+            self._start(cam)
+            # Escalonado: abrir dos ZED a la vez hace que cada SDK sondee el sensor que el otro está
+            # abriendo (Argus "Device in use"); se espera a que la primera transmita.
+            if cam != 'cam2' and not self._wait_stream(cam, timeout=60.0):
+                self.get_logger().warn(f'{cam} no transmite tras 60 s; se sigue con la siguiente cámara')
+        self._startup_done = True
+
+    def _required(self):
+        return [c for c in (self._eth or self.config.get('Cameras/SelectedEtH', ''), 'cam2') if c]
+
+    def _detect_if_missing(self):
+        """Solo consulta pyzed si falta alguna cámara que debería estar activa: cada consulta abre una
+        conexión con nvargus-daemon, y no conviene hacerlo en bucle mientras las cámaras transmiten."""
+        if self._startup_done and not self.swapping and any(
+                not (c in self.procs and self.procs[c].poll() is None) for c in self._required()):
+            self._detect()
 
     def _detect(self):
         if self.sim:
             return
         try:
-            import pyzed.sl as sl
-            self.connected = {str(d.serial_number): str(d.camera_model) for d in sl.Camera.get_device_list()}
+            self.connected = list_zed_devices()
         except Exception as e:
             self.get_logger().warn(f'no se pudo listar las cámaras con pyzed: {e}', throttle_duration_sec=60.0)
             return
+        self._restart_missing()
         known = {self._cam(c, 'Serial') for c in CAMERAS}
         for serial, model in self.connected.items():
             if serial not in known:
                 self.get_logger().warn(f'cámara conectada sin asignar en Config.xml: {model} serial {serial}',
                                        throttle_duration_sec=300.0)
+
+    def _restart_missing(self):
+        """Arranca la EtH seleccionada o cam2 si deberían estar activas y no lo están: una cámara que no
+        estaba al arrancar (p. ej. la ZED anterior aún se cerraba) o cuyo proceso terminó."""
+        if not self._startup_done or self.swapping:
+            return
+        for cam in self._required():
+            running = cam in self.procs and self.procs[cam].poll() is None
+            if not running and self._can_start(cam) is None:
+                self.get_logger().warn(f'{cam} debería estar activa y no lo está: se arranca')
+                self._start(cam)
 
     def _can_start(self, cam):
         if cam not in CAMERAS:
@@ -118,10 +171,16 @@ class CameraManager(Node):
         with self._lock:
             if cam in self.procs and self.procs[cam].poll() is None:
                 return
+            others = foreign_containers(cam)
+            if others:
+                self.get_logger().error(f'no se lanza {cam}: ya hay un contenedor ZED suyo (pid {", ".join(others)}); '
+                                        '¿otra instancia de AtoleROS o un proceso huérfano? Ciérralo antes')
+                return
             depth = self._cam(cam, 'DepthMode', 'NEURAL_PLUS')
             overrides = ';'.join([f'depth.depth_mode:={depth}', 'depth.publish_depth_confidence:=true',
                                   'pos_tracking.pos_tracking_enabled:=false', 'general.pub_resolution:=NATIVE'])
-            launch = (f'ros2 launch zed_wrapper zed_camera.launch.py camera_model:={self._cam(cam, "Model")} '
+            # Launch propio: un contenedor con nombre propio por cámara (ver launch/zed_camera.launch.py).
+            launch = (f'ros2 launch atole_cameras zed_camera.launch.py camera_model:={self._cam(cam, "Model")} '
                       f'camera_name:={cam} namespace:=atole/zed serial_number:={self._cam(cam, "Serial")} '
                       f'publish_urdf:=true publish_tf:=false publish_map_tf:=false "param_overrides:={overrides}"')
             LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -188,6 +247,7 @@ class CameraManager(Node):
                     feedback and feedback('unload')
                     self._stop(cam)
             feedback and feedback('load')
+            self._eth = new
             self._start(new)
             if self.config_set.service_is_ready():
                 self.config_set.call_async(ConfigSet.Request(key='Cameras/SelectedEtH', value=new, persist=True))

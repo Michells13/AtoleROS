@@ -97,14 +97,22 @@
     <ScoreThresh>0.50</ScoreThresh>
     <EihModelPath>/home/user/Documents/pre-Alpha/models/ItabunaM_EiH2.pth</EihModelPath>
     <EihScoreThresh>0.80</EihScoreThresh>
+    <EihModelProfile>itabuna</EihModelProfile>
     <ExcludeClasses>trunk</ExcludeClasses>
+    <StreamRateHz>2.0</StreamRateHz>
+    <WarmupOnStart>true</WarmupOnStart>
+    <!-- Máscara → nube parcial (valores de PozoleV3): erosión, confianza ZED máxima (0 = mejor,
+         100 = peor), gradiente de profundidad máximo en 3×3 y tope de puntos por pod. -->
+    <Cloud><MaskErodePx>4</MaskErodePx><ConfThr>50</ConfThr><DepthGradThrM>0.03</DepthGradThrM><MaxPoints>20000</MaxPoints></Cloud>
     <Completion>
       <PythonExe>/home/user/venvs/adapointr/bin/python</PythonExe>
       <Worker>/home/user/Documents/Corvus/completion/adapointr_infer.py</Worker>
       <EthCkpt>/home/user/Documents/Corvus/completion/AdaPoinTr/runs/ft_aug_100e_20260513_235746/best.pth</EthCkpt>
       <EihCkpt>/home/user/Documents/pre-Alpha/models/EiH_Completion.pth</EihCkpt>
+      <Seed>0</Seed><TimeoutS>120</TimeoutS>
     </Completion>
-    <!-- Área de trabajo en base_link (a definir con el robot real). -->
+    <!-- Área de trabajo en base_link, sobre el centroide de la nube parcial de cada pod:
+         MinReachM ≤ ‖centroide‖ ≤ MaxReachM y MinZ ≤ z ≤ MaxZ (a ajustar con el robot real). -->
     <Workspace><MaxReachM>1.30</MaxReachM><MinReachM>0.25</MinReachM><MinZ>-0.50</MinZ><MaxZ>1.50</MaxZ></Workspace>
   </Perception>
 
