@@ -1,4 +1,6 @@
 """Utilidades para los nodos esqueleto y el arranque de nodos."""
+import signal
+
 import rclpy
 from rclpy.action import ActionServer
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
@@ -45,6 +47,9 @@ def run_node(node_class, args=None):
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
+        # Ctrl+C llega dos veces (al grupo del terminal y reenviado por launch): un segundo SIGINT
+        # a mitad del cierre mataría el nodo (p. ej. camera_manager dejaría huérfanas las ZED).
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()

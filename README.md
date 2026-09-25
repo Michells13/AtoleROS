@@ -12,6 +12,13 @@ https://claude.ai/artifact/LWy6wXZ8wXN6hzgK11eD3j
   - `grip_twist_controller` funcional con el RGI-100 real: 1000 = abierto, 0 = cerrado;
     rotación, feedback real de posición y ángulo.
   - `system_monitor` con checks reales (READY).
+- **Fase 2 (cámaras, TF y SIM):**
+  - `camera_manager` lanza la EtH seleccionada + cam2 con zed-ros2-wrapper
+    (`/atole/zed/<cam>/...`), cambia de EtH (`/atole/cameras/select_eth`) y cierra sin huérfanos.
+  - `extrinsics_publisher` publica `<cam>_calibrated_optical` (matriz exacta de Config.xml,
+    solo si coincide el serial). Es el marco de referencia para la percepción.
+  - `dataset_player` (`sim:=true`): `/atole/sim/list|load|stop` publica un dataset EtH
+    (cam0 + cam1, el mismo de PozoleV3) con los mismos topics, marcos y stamps que la ZED.
   - Los servicios y acciones del resto de nodos siguen respondiendo "no implementado todavía (Fase N)".
 
 ## Compilar

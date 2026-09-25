@@ -4,10 +4,10 @@
        Valores iniciales tomados de PozoleV3/Config.xml el 2026-09-25. Ángulos en grados, distancias en metros. -->
   <Cameras>
     <SelectedEtH>cam1</SelectedEtH>
-    <cam0><Model>zedxhdr</Model><Role>eth</Role><Position>izquierda</Position><Serial /><Display>true</Display></cam0>
-    <cam1><Model>zedxhdr</Model><Role>eth</Role><Position>derecha</Position><Serial>64813059</Serial><Display>true</Display></cam1>
-    <camC><Model>zedxhdr</Model><Role>eth</Role><Position>centro</Position><Serial /><Display>true</Display></camC>
-    <cam2><Model>zedxm</Model><Role>eih</Role><Position>tcp</Position><Serial>55177207</Serial><Display>true</Display></cam2>
+    <cam0><Model>zedxhdr</Model><Role>eth</Role><Position>izquierda</Position><Serial /><Display>true</Display><DepthMode>NEURAL_PLUS</DepthMode></cam0>
+    <cam1><Model>zedxhdr</Model><Role>eth</Role><Position>derecha</Position><Serial>64813059</Serial><Display>true</Display><DepthMode>NEURAL_PLUS</DepthMode></cam1>
+    <camC><Model>zedxhdr</Model><Role>eth</Role><Position>centro</Position><Serial /><Display>true</Display><DepthMode>NEURAL_PLUS</DepthMode></camC>
+    <cam2><Model>zedxm</Model><Role>eih</Role><Position>tcp</Position><Serial>55177207</Serial><Display>true</Display><DepthMode>NEURAL_PLUS</DepthMode></cam2>
   </Cameras>
 
   <!-- Matriz 4x4 por filas. EtH: base_link<-marco óptico de la cámara. EiH: tool0 (brida)<-marco óptico.

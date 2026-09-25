@@ -47,7 +47,11 @@ def _nodes(context):
 
     actions = [Node(package='atole_config', executable='config_manager', output='screen',
                     parameters=[{'config_path': config}])]
-    actions += [Node(package=p, executable=e, output='screen') for p, e in SYSTEM_NODES]
+    for p, e in SYSTEM_NODES:
+        params = [{'sim': sim}] if p == 'atole_cameras' else []
+        # camera_manager cierra las ZED al salir (~15 s cada una): margen antes de SIGTERM/SIGKILL.
+        timeouts = {'sigterm_timeout': '40', 'sigkill_timeout': '10'} if e == 'camera_manager' else {}
+        actions.append(Node(package=p, executable=e, output='screen', parameters=params, **timeouts))
     for package, executable in VENV_NODES:
         params = {'backend': robot} if executable == 'arm_driver' else None
         actions.append(venv_node(package, executable, venv, params))

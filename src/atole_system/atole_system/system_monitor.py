@@ -1,8 +1,8 @@
 """system_monitor — checks de arranque y salud continua del sistema.
 
 Publica /atole/system/health (latched) cada segundo.
-Fase 1: robot, gripper y calibraciones. Detección de cámaras (Fase 2) y warm-up de
-percepción (Fase 3) aparecen como UNKNOWN hasta que existan.
+Robot, gripper, calibraciones y cámaras (streaming por heartbeat; en SIM, las del dataset). El warm-up de
+percepción (Fase 3) aparece como UNKNOWN hasta que exista.
 """
 from atole_interfaces.msg import ArmState, CameraStatus, GripperState, HealthItem, SystemHealth
 from rclpy.node import Node
@@ -50,6 +50,30 @@ class SystemMonitor(Node):
             return WARN, f'gripper {g.init_state_name or "sin inicializar"} (llama a /atole/gripper/reinit)'
         return OK, f'{g.port} · apertura {g.last_opening} · {g.last_angle_deg}°'
 
+    def _cameras(self):
+        c = self.cameras
+        if c is None:
+            return [HealthItem(name='cameras', level=ERROR, message='camera_manager no publica estado')]
+        slots = {s.id: s for s in c.cameras}
+        items = []
+        for cam in (c.active_eth, 'cam2'):
+            s = slots.get(cam)
+            if s is None:
+                items.append(HealthItem(name=f'cam_{cam or "eth"}', level=ERROR, message='cámara no configurada'))
+            elif s.streaming:
+                items.append(HealthItem(name=f'cam_{cam}', level=OK, message=f'transmitiendo ({c.source})'))
+            elif c.source == 'sim':
+                # En SIM solo se reproducen cam0/cam1: cam2 no bloquea (sin refinamiento EiH).
+                items.append(HealthItem(name=f'cam_{cam}', level=UNKNOWN, message='SIM: solo cam0/cam1 (no hay dataset EiH con pose)')
+                             if cam == 'cam2' else
+                             HealthItem(name=f'cam_{cam}', level=WARN, message='SIM: carga un dataset (/atole/sim/load)'))
+            elif c.swap_in_progress or s.active:
+                items.append(HealthItem(name=f'cam_{cam}', level=WARN, message='arrancando'))
+            else:
+                items.append(HealthItem(name=f'cam_{cam}', level=ERROR,
+                                        message='no conectada' if c.source == 'live' and not s.connected else 'sin datos'))
+        return items
+
     def _calibrations(self):
         items = []
         selected = self.config.get('Cameras/SelectedEtH', '')
@@ -79,7 +103,7 @@ class SystemMonitor(Node):
         items.append(HealthItem(name='gripper', level=level, message=text))
         if self.config.ready:
             items += self._calibrations()
-        items.append(HealthItem(name='cameras', level=UNKNOWN, message='detección de cámaras en la Fase 2'))
+        items += self._cameras()
         items.append(HealthItem(name='warmup', level=UNKNOWN, message='warm-up de percepción en la Fase 3'))
 
         checked = [i for i in items if i.level != UNKNOWN]
