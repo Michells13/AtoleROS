@@ -4,6 +4,7 @@ uint8 mode
 bool step_mode                     # confirmar antes de cada movimiento del robot
 string eih_strategy                # single | fused_2view | ppp ("" = Config.xml)
 string selection_strategy          # "" = Config.xml
+bool skip_gripper                  # pruebas: no mueve el gripper (CLOSE/ROTATE/OPEN se saltan)
 ---
 bool ok
 string message

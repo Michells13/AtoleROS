@@ -40,6 +40,14 @@ POS_TOL_M = 0.001
 DEFAULT_JOINT_SPEED, DEFAULT_JOINT_ACCEL = 0.5, 0.5       # rad/s, rad/s²
 DEFAULT_LINE_SPEED, DEFAULT_LINE_ACCEL = 0.1, 0.2         # m/s, m/s²
 STALL_S = 1.5          # en reposo sin haber llegado durante este tiempo = movimiento interrumpido
+
+
+def canonical_joints(target, keep=()):
+    """Cada articulación a su ángulo equivalente en [−180°, 180°] (misma pose física), salvo los
+    índices de `keep`. El AUBO (VM 0.23.1) acepta un moveJoint con algún objetivo fuera de ±180°
+    —p. ej. J5 = 292.6° o J4 = −227.2°— y no lo ejecuta, sin error, aunque getJointMaxPositions diga
+    ±360°. Con el valor equivalente dentro de ±180° sí se mueve, sea cual sea el recorrido."""
+    return [t if i in keep else wrap(t) for i, t in enumerate(target)]
 RECONNECT_S = 5.0
 
 
@@ -226,6 +234,12 @@ class ArmDriver(Node):
             target = list(g.joints)
             if self.lock_j6 and not g.bypass_j6_lock:
                 target[5] = self.state['joints'][5]
+            near = canonical_joints(target, keep=(5,) if self.lock_j6 and not g.bypass_j6_lock else ())
+            changed = [f'J{i + 1} {math.degrees(a):.1f}° → {math.degrees(b):.1f}°'
+                       for i, (a, b) in enumerate(zip(target, near)) if abs(a - b) > 1e-6]
+            if changed:
+                self.get_logger().info(f'move_joints: ángulo equivalente dentro de ±180°: {", ".join(changed)}')
+            target = near
             try:
                 self.client.move_joint(target, g.speed or DEFAULT_JOINT_SPEED, g.accel or DEFAULT_JOINT_ACCEL)
             except AuboError as e:
@@ -256,6 +270,7 @@ class ArmDriver(Node):
                     q, why = self._solve_ik(seed, pose, g.prefer_facing)
                     if self.lock_j6:
                         q[5] = seed[5]
+                    q = canonical_joints(q, keep=(5,) if self.lock_j6 else ())
                     res.ik_solution = q
                     self.get_logger().info(f'move_pose J_IK: {why}; J={[round(math.degrees(v), 1) for v in q]}°')
                     self.client.move_joint(q, g.speed or DEFAULT_JOINT_SPEED, g.accel or DEFAULT_JOINT_ACCEL)
@@ -308,6 +323,7 @@ class ArmDriver(Node):
         t0, stalled_since = time.monotonic(), None
         self._stop_event.clear()
         s = self._fresh_state()
+        start, moved = list(s['joints']), False
         while True:
             if self._stop_event.is_set():
                 return self._abort(gh, res, 'detenido por /atole/arm/stop')
@@ -318,6 +334,7 @@ class ArmDriver(Node):
             if s['protective_stop'] or s['emergency_stop']:
                 return self._abort(gh, res, f'movimiento interrumpido: robot en {s["safety_mode"]}')
             d = distance(s)
+            moved = moved or max(abs(a - b) for a, b in zip(s['joints'], start)) > JOINT_TOL
             gh.publish_feedback(feedback(s, d))
             idle = s['steady'] and s['queue'] == 0 and s['exec_id'] == -1
             if idle and d <= tol:
@@ -326,6 +343,9 @@ class ArmDriver(Node):
             if idle:
                 stalled_since = stalled_since or time.monotonic()
                 if time.monotonic() - stalled_since > STALL_S:
+                    if not moved:
+                        return self._abort(gh, res, 'el AUBO aceptó el movimiento pero no lo ejecutó '
+                                                    f'(error {d:.4f}); revisa el objetivo')
                     return self._abort(gh, res, f'el robot se detuvo sin llegar (error {d:.4f})')
             else:
                 stalled_since = None

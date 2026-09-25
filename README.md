@@ -29,6 +29,15 @@ https://claude.ai/artifact/LWy6wXZ8wXN6hzgK11eD3j
   - Paridad con PozoleV3 (`tools/tests/test_fase3_parity.py`, 43 detecciones): detecciones, scores
     y máscaras idénticos; pose ≤ 1.1 mm y 0.8°, diferencia que viene solo de reconstruir la nube desde
     profundidad + K (con la misma nube: 0.001 mm y 0.05°, ruido de GPU).
+- **Fase 4 (misión y selección):**
+  - `pod_selector`: estrategias proximity | left_to_right | right_to_left | confidence y filtro de
+    alcanzabilidad (IK de frente del pre-pick y del pick).
+  - `mission_manager`: acción `/atole/mission/harvest` (todos | siguiente, paso a paso con
+    `/atole/mission/confirm_step`, `/atole/mission/abort`). Home2 → detectar → seleccionar → pre-pick →
+    pick → cerrar → rotar → retirar → Release → Home2, con las velocidades y la regla de aproximación
+    de PozoleV3 (`atole_common/grasp.py`). Pruebas en `tools/tests/test_fase4_mission.py`.
+  - `arm_driver`: los objetivos articulares se llevan a su equivalente dentro de ±180° (el AUBO acepta
+    y no ejecuta, sin error, objetivos fuera de ese rango).
   - Los servicios y acciones de las fases siguientes siguen respondiendo "no implementado todavía (Fase N)".
 
 ## Compilar

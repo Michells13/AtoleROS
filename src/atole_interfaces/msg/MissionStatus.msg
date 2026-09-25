@@ -8,5 +8,6 @@ string confirmation_prompt         # qué movimiento espera confirmación
 int32 current_pod_id
 int32 pods_done
 int32 pods_remaining
+int32 pods_failed
 string eih_strategy                # single | fused_2view | ppp
 string message
