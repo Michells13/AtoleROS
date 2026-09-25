@@ -11,7 +11,9 @@ import threading
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from atole_interfaces.msg import ConfigSnapshot
+import math
+
+from atole_interfaces.msg import ArmState, ConfigSnapshot
 from atole_interfaces.srv import ConfigGet, ConfigSet, SaveCalibration, SavePose
 from diagnostic_msgs.msg import KeyValue
 from rclpy.node import Node
@@ -37,6 +39,8 @@ class ConfigManager(Node):
         self.create_service(ConfigSet, '/atole/config/set', self._on_set)
         self.create_service(SavePose, '/atole/config/save_pose', self._on_save_pose)
         self.create_service(SaveCalibration, '/atole/config/save_calibration', self._on_save_calibration)
+        self._arm = None
+        self.create_subscription(ArmState, '/atole/arm/state', lambda m: setattr(self, '_arm', m), LATCHED)
         self._publish()
         self.get_logger().info(f'Config.xml cargado: {self.path} ({len(self._flat())} claves)')
 
@@ -109,16 +113,19 @@ class ConfigManager(Node):
         if tag is None:
             res.ok, res.message = False, f'pose desconocida: {req.name} (home | home2 | release)'
             return res
+        joints = list(req.joints_deg)
         if req.from_current:
-            res.ok, res.message = False, 'from_current requiere arm_driver (Fase 1); envía joints_deg'
-            return res
+            if self._arm is None or not self._arm.connected:
+                res.ok, res.message = False, 'no hay estado del robot (arm_driver desconectado)'
+                return res
+            joints = [math.degrees(v) for v in self._arm.joints]
         with self._lock:
-            for i, value in enumerate(req.joints_deg, start=1):
+            for i, value in enumerate(joints, start=1):
                 self._leaf(f'Poses/{tag}/J{i}').text = f'{value:.4f}'
             self._save()
             self._publish()
-        res.ok, res.joints_deg = True, list(req.joints_deg)
-        res.message = f'{tag} guardada: {[round(v, 2) for v in req.joints_deg]}'
+        res.ok, res.joints_deg = True, joints
+        res.message = f'{tag} guardada: {[round(v, 2) for v in joints]}'
         self.get_logger().info(res.message)
         return res
 

@@ -5,9 +5,14 @@ Diseñado desde cero; PozoleV3 se usa solo como guía. Arquitectura y grafo inte
 https://claude.ai/artifact/LWy6wXZ8wXN6hzgK11eD3j
 
 ## Estado
-**Fase 0 (esqueleto):** los 15 paquetes compilan y todos los nodos arrancan con su interfaz
-definitiva (topics, servicios y acciones). Salvo `config_manager`, los servicios y acciones
-responden "no implementado todavía (Fase N)".
+- **Fase 0 (esqueleto):** los 15 paquetes compilan y todos los nodos arrancan con su interfaz definitiva.
+- **Fase 1 (robot y gripper):**
+  - `arm_driver` funcional contra la VM del AUBO: `/joint_states` a 20 Hz, lease, movimientos
+    cancelables, IK de frente y moveL con J6 bloqueado. Pruebas en `tools/tests/test_fase1_arm.py`.
+  - `grip_twist_controller` funcional con el RGI-100 real: 1000 = abierto, 0 = cerrado;
+    rotación, feedback real de posición y ángulo.
+  - `system_monitor` con checks reales (READY).
+  - Los servicios y acciones del resto de nodos siguen respondiendo "no implementado todavía (Fase N)".
 
 ## Compilar
 ```bash
